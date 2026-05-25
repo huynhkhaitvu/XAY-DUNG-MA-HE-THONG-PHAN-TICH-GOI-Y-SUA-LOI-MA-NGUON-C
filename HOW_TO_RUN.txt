@@ -1,0 +1,175 @@
+📋 MỞ NHƯ THẾ NÀO?
+═══════════════════════════════════════
+
+🎯 MỤC ĐÍCH:
+  Nhấn đúp 1 file → Toàn bộ hệ thống (backend + frontend) chạy tự động
+
+═══════════════════════════════════════
+✨ QUICK START - CÓ 3 BƯỚC
+═══════════════════════════════════════
+
+📌 BƯỚC 1: Setup API Key (LẦN ĐẦU TIÊN)
+  → Nhấn đúp: SETUP_API_KEY.bat
+  → Làm theo hướng dẫn
+
+📌 BƯỚC 2: Cài Dependencies (LẦN ĐẦU TIÊN)
+  → Nhấn đúp: INSTALL_DEPENDENCIES.bat
+  → Chờ cài xong (hoặc bỏ qua nếu đã cài)
+
+📌 BƯỚC 3: Chạy Hệ Thống (MỘI LẦN SỬ DỤNG)
+  → Nhấn đúp: RUN.bat
+  → ✅ Hệ thống sẽ khởi động!
+
+═══════════════════════════════════════
+📁 CÁC FILES CHÍNH
+═══════════════════════════════════════
+
+🔴 RUN.bat ⭐
+  • Chạy hệ thống (backend + frontend)
+  • Khuyên dùng nhất!
+
+🟡 START_SYSTEM.bat
+  • Giống RUN.bat
+  • Backup thay thế
+
+🟠 SETUP_API_KEY.bat
+  • Hướng dẫn setup Gemini API Key
+  • Chạy lần đầu
+
+🟢 INSTALL_DEPENDENCIES.bat
+  • Cài Flask, requests, etc.
+  • Chạy lần đầu (hoặc nếu có lỗi)
+
+🔵 QUICK_START.txt
+  • Hướng dẫn chi tiết (file này)
+
+═══════════════════════════════════════
+⏱️ HƯỚNG DẪN CHI TIẾT
+═══════════════════════════════════════
+
+🟦 LẦN ĐẦU TIÊN (Setup):
+
+  1️⃣ SETUP_API_KEY.bat
+     → Lấy Gemini API key
+     → Tạo file backend\.env
+     → Paste key vào
+
+  2️⃣ INSTALL_DEPENDENCIES.bat
+     → Cài Flask, requests, etc.
+     → Chờ "Press any key..."
+
+  3️⃣ RUN.bat
+     → Backend khởi động
+     → Frontend mở browser
+     → ✅ XỬ LÝ XONG
+
+
+🟩 LẦN THỨ 2 TRỞ ĐI (Sử dụng thường ngày):
+
+  ➡️ Chỉ cần: RUN.bat
+     • Kiểm tra kết nối
+     • Chạy backend
+     • Mở frontend
+     • ✅ XONG!
+
+═══════════════════════════════════════
+🎮 SAU KHI MỞ HỆ THỐNG
+═══════════════════════════════════════
+
+✅ Giao diện chính: index.html
+   • Phân tích code C
+   • Biên dịch
+   • Chạy test cases
+
+✅ Giao diện học tập: learning.html
+   • Interactive learning
+   • AI gợi ý hints
+   • Sửa lỗi từng bước
+
+═══════════════════════════════════════
+⚠️ QUAN TRỌNG
+═══════════════════════════════════════
+
+⛔ GIỮ TERMINAL BACKEND MỞ
+   • Đừng đóng terminal (nếu bấm Ctrl+C)
+   • Hệ thống sẽ không chạy
+
+⛔ CHỰ ĐÓI BACKEND KHỞI ĐỘNG
+   • Khi nhấn RUN.bat
+   • Chờ 3-5 giây
+
+⛔ FRESH BROWSER
+   • Nếu lỗi kết nối
+   • Bấm Ctrl+Shift+R (hard refresh)
+
+═══════════════════════════════════════
+🆘 TROUBLESHOOT
+═══════════════════════════════════════
+
+❌ "GCC not found"
+   → Cài MinGW-w64
+   → Thêm vào PATH
+   → Restart Windows
+
+❌ "Python not found"
+   → Cài Python 3.8+
+   → Chọn "Add to PATH"
+   → Restart Windows
+
+❌ "API Key error"
+   → Kiểm tra backend\.env
+   → Lấy key mới từ aistudio.google.com
+
+❌ "Backend not responding"
+   → Check terminal backend
+   → Nếu có lỗi → fix + restart
+
+❌ "Frontend không kết nối"
+   → Refresh browser (Ctrl+R)
+   → Check backend đang chạy
+   → Check port 5000 không bị chiếm
+
+═══════════════════════════════════════
+💡 TIPS
+═══════════════════════════════════════
+
+✨ Tạo shortcut cho RUN.bat trên Desktop
+   → Chuột phải RUN.bat
+   → "Create shortcut"
+   → Kéo vào Desktop
+   → Mở nhanh chỉ cần double-click
+
+✨ Nếu bị lỗi, chạy lại:
+   → INSTALL_DEPENDENCIES.bat
+   → Rồi RUN.bat
+
+✨ Backend mất kết nối?
+   → Đóng terminal backend
+   → Chạy RUN.bat lại
+
+═══════════════════════════════════════
+🎯 FLOW TÓM TẮT
+═══════════════════════════════════════
+
+SETUP (LẦN 1):
+  SETUP_API_KEY.bat
+       ↓
+  INSTALL_DEPENDENCIES.bat
+       ↓
+  RUN.bat ✅
+
+
+THƯỜNG NGÀY:
+  RUN.bat ✅
+
+
+═══════════════════════════════════════
+
+💬 Câu hỏi?
+  • Đọc 00_START_HERE.md
+  • Đọc DEVELOPER_GUIDE.md
+  • Đọc README.md
+
+═══════════════════════════════════════
+Bắt đầu: Nhấn đúp RUN.bat
+═══════════════════════════════════════

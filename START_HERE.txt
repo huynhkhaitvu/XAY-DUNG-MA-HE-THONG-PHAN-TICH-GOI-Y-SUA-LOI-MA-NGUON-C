@@ -1,0 +1,169 @@
+═══════════════════════════════════════════════════════════════
+🚀 HỆ THỐNG PHÂN TÍCH & GỢI Ý SỬA LỖI MÃ C
+═══════════════════════════════════════════════════════════════
+
+✨ MỞ HỆ THỐNG CHỈ CẦN NHẤN ĐÚP 1 FILE
+
+═══════════════════════════════════════════════════════════════
+🎯 HƯỚNG DẪN NHANH NHẤT
+═══════════════════════════════════════════════════════════════
+
+LẦN ĐẦU TIÊN (5 phút):
+  1. SETUP_API_KEY.bat      (setup Gemini API)
+  2. INSTALL_DEPENDENCIES.bat (cài packages)
+  3. RUN.bat                (khởi động hệ thống)
+
+MỖI LẦN SAU (10 giây):
+  → RUN.bat (xong!)
+
+═══════════════════════════════════════════════════════════════
+📂 CÁC FILES BATCH MỚI
+═══════════════════════════════════════════════════════════════
+
+🔴 RUN.bat ⭐⭐⭐
+   → Khởi động toàn bộ hệ thống
+   → Backend + Frontend
+   → Khuyên dùng nhất!
+
+🟠 SETUP_API_KEY.bat
+   → Setup Gemini API Key (lần 1)
+   → Hướng dẫn từng bước
+
+🟡 INSTALL_DEPENDENCIES.bat
+   → Cài Flask, requests, etc. (lần 1)
+   → Chỉ cần chạy 1 lần
+
+🟢 START_SYSTEM.bat
+   → Giống RUN.bat (backup)
+   → Nếu RUN.bat lỗi → dùng này
+
+═══════════════════════════════════════════════════════════════
+📋 CÁC FILES HƯỚNG DẪN
+═══════════════════════════════════════════════════════════════
+
+📄 STARTUP_GUIDE.md ← ĐỌC TRƯỚC
+   → Hướng dẫn chi tiết (Markdown)
+   → Mở bằng VS Code hoặc browser
+
+📄 HOW_TO_RUN.txt
+   → Hướng dẫn chi tiết (Text)
+   → Mở bằng Notepad
+
+📄 QUICK_START.txt
+   → Tóm tắt nhanh
+   → Dễ hiểu nhất
+
+═══════════════════════════════════════════════════════════════
+🔄 HƯỚNG DẪN CHI TIẾT
+═══════════════════════════════════════════════════════════════
+
+BƯỚC 1: Setup API (chạy 1 lần)
+─────────────────────────────────
+1. Nhấn đúp: SETUP_API_KEY.bat
+2. Làm theo hướng dẫn trên màn hình
+3. Kết quả: Tạo file backend\.env
+
+BƯỚC 2: Cài Packages (chạy 1 lần)
+──────────────────────────────────
+1. Nhấn đúp: INSTALL_DEPENDENCIES.bat
+2. Chờ cài xong (2-5 phút)
+3. Bấm Enter để thoát
+
+BƯỚC 3: Khởi Động (chạy mỗi lần)
+──────────────────────────────────
+1. Nhấn đúp: RUN.bat
+2. Kết quả:
+   • Terminal backend mở
+   • Browser frontend mở
+3. GIỮ TERMINAL BACKEND MỞ!
+
+═══════════════════════════════════════════════════════════════
+✅ SAU KHI MỞ THÀNH CÔNG
+═══════════════════════════════════════════════════════════════
+
+Frontend mở tự động: index.html
+  ├─ Phân tích & biên dịch mã C
+  ├─ Chạy test cases
+  └─ Xem AI suggestions
+
+Backend chạy trên: http://localhost:5000
+  └─ API endpoints
+
+Muốn: Interactive Learning?
+  → Vào: frontend/learning.html
+  → Hoặc: http://localhost:5500/learning.html
+
+═══════════════════════════════════════════════════════════════
+🆘 TROUBLESHOOT NHANH
+═══════════════════════════════════════════════════════════════
+
+❌ "GCC not found"
+   → Cài MinGW-w64: https://www.mingw-w64.org/
+   → Restart Windows
+
+❌ "Python not found"
+   → Cài Python: https://www.python.org/
+   → Chọn "Add to PATH"
+   → Restart Windows
+
+❌ "Backend not responding"
+   → Chạy: INSTALL_DEPENDENCIES.bat (cài lại)
+   → Rồi: RUN.bat
+
+❌ "Port 5000 occupied"
+   → Đóng ứng dụng khác dùng port 5000
+   → Hoặc restart Windows
+
+═══════════════════════════════════════════════════════════════
+💡 TIPS
+═══════════════════════════════════════════════════════════════
+
+✨ Tạo Shortcut trên Desktop:
+   1. Chuột phải RUN.bat
+   2. "Create shortcut"
+   3. Kéo vào Desktop
+   4. Mỗi lần: Double-click shortcut
+
+✨ Kiểm tra backend manually:
+   http://localhost:5000/api/health
+   → Nếu thấy: {"status": "ok"} ✓
+
+✨ Hard refresh browser nếu lỗi:
+   Ctrl+Shift+R
+
+═══════════════════════════════════════════════════════════════
+📊 FLOW TÓM TẮT
+═══════════════════════════════════════════════════════════════
+
+SETUP (Lần 1):
+  SETUP_API_KEY.bat
+           ↓
+  INSTALL_DEPENDENCIES.bat
+           ↓
+  RUN.bat ✅
+
+NORMAL (Mỗi lần):
+  RUN.bat ✅
+
+═══════════════════════════════════════════════════════════════
+🎮 BẮT ĐẦU NGAY
+═══════════════════════════════════════════════════════════════
+
+Lần 1:
+  1. Nhấn đúp: SETUP_API_KEY.bat
+  2. Nhấn đúp: INSTALL_DEPENDENCIES.bat
+  3. Nhấn đúp: RUN.bat
+
+Lần sau:
+  → Nhấn đúp: RUN.bat
+
+═══════════════════════════════════════════════════════════════
+
+Đọc thêm:
+  • STARTUP_GUIDE.md (chi tiết)
+  • HOW_TO_RUN.txt (hướng dẫn)
+  • 00_START_HERE.md (giới thiệu)
+
+═══════════════════════════════════════════════════════════════
+💬 Bước tiếp theo: Nhấn đúp RUN.bat
+═══════════════════════════════════════════════════════════════

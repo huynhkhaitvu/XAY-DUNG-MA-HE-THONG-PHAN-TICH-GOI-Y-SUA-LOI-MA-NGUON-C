@@ -1,0 +1,119 @@
+🔧 GCC SETUP - HƯỚNG DẪN NHANH
+═════════════════════════════════════════════════════════════
+
+❓ CÓ GCC CHƯA?
+─────────────────────────────────────
+Mở PowerShell, chạy: gcc --version
+
+✓ Nếu thấy version → Bỏ qua, chạy RUN.bat
+❌ Nếu báo "not found" → Cần cài đặt
+
+═════════════════════════════════════════════════════════════
+🚀 3 CÁCH CÀI GCC
+═════════════════════════════════════════════════════════════
+
+CÁCH 1️⃣ - NHANH NHẤT (Có Chocolatey)
+─────────────────────────────────────
+✓ Nếu đã cài Chocolatey:
+  1. Mở PowerShell as Admin
+  2. Chạy: choco install mingw
+  3. Chờ xong (2-3 phút)
+  4. Restart PowerShell
+  5. Test: gcc --version
+
+❌ Nếu chưa cài Chocolatey:
+  1. Vào: https://chocolatey.org/install
+  2. Copy command từ trang
+  3. Paste vào PowerShell as Admin
+  4. Chờ xong
+  5. Chạy lại: choco install mingw
+
+
+CÁCH 2️⃣ - TỰ ĐỘNG (Batch Script)
+──────────────────────────────────
+1. Nhấn đúp: AUTO_INSTALL_GCC.bat
+2. Chạy as Administrator
+3. Chờ cài xong (2-5 phút)
+4. Restart PowerShell
+5. Test: gcc --version
+
+
+CÁCH 3️⃣ - THỦ CÔNG (Download)
+──────────────────────────────
+1. Tải MinGW-w64 từ:
+   https://www.mingw-w64.org/
+
+2. Chạy installer:
+   • Architecture: x86_64
+   • Folder: C:\mingw-w64
+
+3. Thêm vào PATH:
+   • Environment Variables
+   • Path → New
+   • C:\mingw-w64\bin
+
+4. Restart Windows
+
+5. Test: gcc --version
+
+═════════════════════════════════════════════════════════════
+📋 FILES BATCH ĐỂ GIÚP
+═════════════════════════════════════════════════════════════
+
+CHECK_GCC.bat
+  → Kiểm tra GCC có cài không
+
+AUTO_INSTALL_GCC.bat
+  → Cài GCC tự động (Chocolatey)
+
+ADD_GCC_TO_PATH.bat
+  → Thêm GCC vào PATH tự động
+
+INSTALL_GCC_GUIDE.txt
+  → Hướng dẫn chi tiết
+
+═════════════════════════════════════════════════════════════
+✅ QUY TRÌNH HOÀN CHỈNH
+═════════════════════════════════════════════════════════════
+
+0️⃣ CHECK: Nhấn đúp CHECK_GCC.bat
+   • ✓ Nếu ok → Bỏ qua
+   • ❌ Nếu không → Đến bước 1
+
+1️⃣ INSTALL: Chọn 1 cách:
+   • Cách 1: choco install mingw (PowerShell)
+   • Cách 2: AUTO_INSTALL_GCC.bat
+   • Cách 3: Tải từ mingw-w64.org
+
+2️⃣ ADD PATH: 
+   • Tự động: ADD_GCC_TO_PATH.bat
+   • Thủ công: Environment Variables
+
+3️⃣ RESTART: PowerShell hoặc Windows
+
+4️⃣ TEST: Nhấn đúp CHECK_GCC.bat
+   • ✓ Nếu thấy ✓ → OK!
+
+5️⃣ RUN: Nhấn đúp RUN.bat
+
+═════════════════════════════════════════════════════════════
+⚠️ LƯU Ý
+═════════════════════════════════════════════════════════════
+
+• AUTO_INSTALL_GCC.bat cần "Run as Administrator"
+• ADD_GCC_TO_PATH.bat cũng cần Admin rights
+• Sau khi cài → RESTART PowerShell mới
+• Hoặc restart Windows để PATH cập nhật ngay
+
+═════════════════════════════════════════════════════════════
+🎯 NHANH NHẤT
+═════════════════════════════════════════════════════════════
+
+1. Chuột phải: AUTO_INSTALL_GCC.bat
+2. "Run as administrator"
+3. Chờ xong (3-5 phút)
+4. Restart PowerShell
+5. Test: gcc --version
+6. Chạy: RUN.bat
+
+═════════════════════════════════════════════════════════════

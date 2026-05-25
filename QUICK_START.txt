@@ -1,0 +1,137 @@
+# 🚀 HƯỚNG DẪN MỞ NHANH HỆ THỐNG
+
+## Cách nhanh nhất: Nhấn đúp file
+
+### ✨ **MỞ MỘT FILE - TOÀN BỘ HỆ THỐNG CHẠY**
+
+```
+📁 Thư mục gốc
+├─ RUN.bat          ← 👈 NHẤN ĐÚP FILE NÀY
+├─ START_SYSTEM.bat (tương tự)
+├─ SETUP_API_KEY.bat
+```
+
+---
+
+## 📌 LẦN ĐẦU TiÊN (Setup)
+
+### Bước 1: Lấy Gemini API Key
+
+1. Vào: https://aistudio.google.com/app/apikey
+2. Bấm **"Create API key"**
+3. Copy key (dạng: `AIzaSyD...`)
+
+### Bước 2: Tạo file `.env`
+
+**Cách A: Dùng SETUP_API_KEY.bat**
+- Nhấn đúp: `SETUP_API_KEY.bat`
+- Làm theo hướng dẫn
+
+**Cách B: Tạo file thủ công**
+1. Tạo file: `backend\.env`
+2. Paste nội dung:
+```
+GEMINI_API_KEY=your-api-key-here
+FLASK_ENV=development
+FLASK_DEBUG=True
+```
+3. Thay `your-api-key-here` bằng API key thực
+
+### Bước 3: Cài GCC (MinGW)
+
+Nếu GCC chưa cài:
+- Tải: https://www.mingw-w64.org/
+- Cài đặt
+- Thêm vào PATH (hoặc restart Windows)
+
+**Test GCC:**
+```powershell
+gcc --version
+```
+
+---
+
+## 🎮 LẦN THỨ 2 TRỞ ĐI: MỞ NHƯ BÌNH THƯỜNG
+
+### **Nhấn đúp 1 file = Toàn bộ hệ thống chạy:**
+
+```
+❶ Nhấn đúp: RUN.bat
+   ↓
+❷ Kiểm tra: GCC, Python, API Key
+   ↓
+❸ Backend khởi động (terminal riêng)
+   ↓
+❹ Frontend mở tự động trong trình duyệt
+   ↓
+✅ XONG! Hệ thống sẵn sàng
+```
+
+---
+
+## 📊 CÁC FILES BATCH
+
+| File | Mục đích |
+|------|---------|
+| **RUN.bat** | Chạy hệ thống (chọn này) |
+| START_SYSTEM.bat | Giống RUN.bat |
+| SETUP_API_KEY.bat | Hướng dẫn setup API |
+
+---
+
+## 🌐 MỞ SAU
+
+### Giao diện chính (phân tích code):
+- **index.html** (tự động mở)
+- hoặc: http://localhost:5500/index.html
+
+### Giao diện học tập (interactive learning):
+- **learning.html** 
+- hoặc: http://localhost:5500/learning.html
+
+---
+
+## ⚠️ QUAN TRỌNG
+
+- **GIỮ TERMINAL BACKEND MỞ** khi đang sử dụng
+- Để dừng: Đóng terminal backend
+- Backend chạy trên: **http://localhost:5000**
+- Frontend chạy trên: **http://localhost:5500** hoặc mở file trực tiếp
+
+---
+
+## 🆘 TROUBLESHOOTING
+
+**Backend lỗi "GCC not found":**
+```
+→ Cài MinGW-w64 + restart Windows
+```
+
+**Frontend không kết nối:**
+```
+→ Chắc backend đang chạy (check terminal)
+→ Refresh browser (Ctrl+R)
+```
+
+**API Key lỗi:**
+```
+→ Kiểm tra file backend\.env
+→ Lấy key mới từ Google AI Studio
+```
+
+---
+
+## 💡 TIPS
+
+- Lần đầu chạy có thể hơi chậm (cài dependencies)
+- Sau lần đầu sẽ nhanh hơn
+- Có thể tạo shortcut cho RUN.bat trên Desktop để mở nhanh
+
+---
+
+**Bắt đầu:**
+```
+1️⃣ Lần đầu: SETUP_API_KEY.bat
+2️⃣ Sau đó: RUN.bat
+3️⃣ Xong! 🎉
+```
