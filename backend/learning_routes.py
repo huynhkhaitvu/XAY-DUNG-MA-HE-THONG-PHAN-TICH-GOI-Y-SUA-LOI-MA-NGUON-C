@@ -5,7 +5,7 @@ Các endpoints cho học tập interactively
 from flask import Blueprint, request, jsonify, current_app
 from db_manager import DatabaseManager
 from models import Attempt, AttemptStep
-from bug_taxonomy import BUG_TAXONOMY
+from bug_taxonomy import BUG_TAXONOMY, get_bug_info
 from datetime import datetime
 import json
 
@@ -78,7 +78,16 @@ def start_learning():
         )
         
         bug_type_id = classification.get('bug_type_id', 'CF001')
-        bug_type_name = classification.get('bug_type_name', 'Unknown')
+        # Prefer taxonomy (Vietnamese) name when available
+        bug_info = get_bug_info(bug_type_id)
+        if bug_info:
+            bug_type_name = bug_info.get('name', classification.get('bug_type_name', 'Unknown'))
+        else:
+            bug_type_name = classification.get('bug_type_name', 'Unknown')
+
+        # Remove confidence from classification before returning to frontend
+        if 'confidence' in classification:
+            classification.pop('confidence', None)
         
         # Step 4: Tạo attempt
         attempt = Attempt(

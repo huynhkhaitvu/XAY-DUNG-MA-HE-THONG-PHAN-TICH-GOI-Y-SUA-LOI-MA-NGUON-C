@@ -1,11 +1,14 @@
-// API Configuration
-const API_BASE_URL = 'http://localhost:5000/api';
+// API Configuration: use relative path so requests are same-origin
+const API_BASE_URL = '/api';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
+    checkUserAuthAndRedirect();
     initializeEventListeners();
     renderTestCases();
     checkBackendConnection();
+    checkUserAuth();
+    setupLogout();
 });
 
 // Check backend connection
@@ -23,11 +26,43 @@ async function checkBackendConnection() {
 // Event Listeners
 function initializeEventListeners() {
     document.getElementById('compileBtn').addEventListener('click', handleCompile);
-    document.getElementById('runBtn').addEventListener('click', handleRun);
     document.getElementById('analyzeBtn').addEventListener('click', handleAnalyze);
-    document.getElementById('executeBtn').addEventListener('click', handleExecute);
     document.getElementById('clearBtn').addEventListener('click', handleClear);
     document.getElementById('addTestCaseBtn').addEventListener('click', handleAddTestCase);
+    // File open button handlers
+    const openBtn = document.getElementById('openFileBtn');
+    const fileInput = document.getElementById('fileInput');
+    if (openBtn && fileInput) {
+        openBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+    }
+}
+
+// Handle file selection: read first file and put into editor
+function handleFileSelect(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const maxSize = 1024 * 1024; // 1MB limit
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+
+    if (file.size > maxSize) {
+        showError('File quá lớn (tối đa 1MB)');
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = e.target.result;
+        document.getElementById('codeEditor').value = text;
+        if (fileNameDisplay) fileNameDisplay.textContent = file.name;
+        showSuccess('Đã tải file vào trình soạn thảo');
+    };
+    reader.onerror = function() {
+        showError('Không thể đọc file');
+    };
+    reader.readAsText(file);
 }
 
 // Get code
@@ -82,50 +117,6 @@ async function handleCompile() {
     }
 }
 
-// Handle Run (in modal)
-async function handleRun() {
-    const code = getCode();
-    if (!code.trim()) {
-        showError('Vui lòng nhập mã C');
-        return;
-    }
-}
-
-// Handle Execute
-async function handleExecute() {
-    const code = getCode();
-    const input = document.getElementById('programInput').value;
-
-    if (!code.trim()) {
-        showError('Vui lòng nhập mã C');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/run`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, input })
-        });
-
-        const data = await response.json();
-
-        let resultHTML = '<div class="alert alert-info alert-custom"><strong>Output:</strong></div>';
-        resultHTML += `<pre>${escapeHtml(data.output || data.error)}</pre>`;
-
-        if (data.error && data.error.trim()) {
-            resultHTML = '<div class="alert alert-error alert-custom"><strong>Lỗi Runtime:</strong></div>';
-            resultHTML += `<pre>${escapeHtml(data.error)}</pre>`;
-        }
-
-        document.getElementById('resultsContainer').innerHTML = resultHTML;
-        bootstrap.Modal.getInstance(document.getElementById('runModal')).hide();
-
-    } catch (error) {
-        showError('Lỗi kết nối: ' + error.message);
-    }
-}
-
 // Handle Analyze
 async function handleAnalyze() {
     const code = getCode();
@@ -138,10 +129,13 @@ async function handleAnalyze() {
 
     showLoading('analyzeSpinner');
     try {
+        const aiProviderEl = document.getElementById('aiProviderSelect');
+        const aiProvider = aiProviderEl ? aiProviderEl.value : 'gemini';
+
         const response = await fetch(`${API_BASE_URL}/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, testcases })
+            body: JSON.stringify({ code, testcases, ai_provider: aiProvider })
         });
 
         const data = await response.json();
@@ -161,26 +155,49 @@ async function handleAnalyze() {
             }
         }
 
-        // Test results
-        if (data.test_results && data.test_results.length > 0) {
-            resultHTML += '<h6 class="mt-3">Test Results:</h6>';
-            data.test_results.forEach((test, idx) => {
-                const status = test.passed ? '✓ PASS' : '✗ FAIL';
-                const statusClass = test.passed ? 'passed' : 'failed';
-                resultHTML += `<div class="test-case-result ${statusClass}">`;
-                resultHTML += `<strong>Test ${idx + 1}: ${status}</strong><br>`;
-                resultHTML += `Input: ${escapeHtml(test.input)}<br>`;
-                resultHTML += `Expected: ${escapeHtml(test.expected)}<br>`;
-                resultHTML += `Actual: ${escapeHtml(test.actual)}`;
-                resultHTML += '</div>';
-            });
-        }
+        // Test results - HIDDEN (only for backend processing)
+        // if (data.test_results && data.test_results.length > 0) {
+        //     resultHTML += '<h6 class="mt-3">Test Results:</h6>';
+        //     data.test_results.forEach((test, idx) => {
+        //         const status = test.passed ? '✓ PASS' : '✗ FAIL';
+        //         const statusClass = test.passed ? 'passed' : 'failed';
+        //         resultHTML += `<div class="test-case-result ${statusClass}">`;
+        //         resultHTML += `<strong>Test ${idx + 1}: ${status}</strong><br>`;
+        //         resultHTML += `Input: ${escapeHtml(test.input)}<br>`;
+        //         resultHTML += `Expected: ${escapeHtml(test.expected)}<br>`;
+        //         resultHTML += `Actual: ${escapeHtml(test.actual)}`;
+        //         resultHTML += '</div>';
+        //     });
+        // }
 
         // AI Suggestions
-        if (data.ai_suggestions) {
+        // AI Suggestions / Classification
+            if (data.classification) {
+                const cls = data.classification;
+                // Show localized Vietnamese name if provided by backend
+                const name = cls.bug_type_name || cls.bug_type_id || 'Unknown';
+                resultHTML += '<div class="suggestion-box mt-3">';
+                resultHTML += '<h6>🔎 Phân loại lỗi (AI):</h6>';
+                resultHTML += `<div class="suggestion-text"><strong>${escapeHtml(name)}</strong></div>`;
+                resultHTML += '</div>';
+            }
+
+        if (data.ai_analysis) {
+            resultHTML += '<div class="suggestion-box mt-3">';
+            resultHTML += '<h6>💡 Phân tích & Gợi ý sửa (AI):</h6>';
+            // Format with line breaks and preserve whitespace for better readability
+            const formattedAnalysis = escapeHtml(data.ai_analysis)
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+            resultHTML += `<div class="suggestion-text" style="white-space: pre-wrap; word-wrap: break-word;"><p>${formattedAnalysis}</p></div>`;
+            resultHTML += '</div>';
+        } else if (data.ai_suggestions) {
             resultHTML += '<div class="suggestion-box mt-3">';
             resultHTML += '<h6>💡 Gợi ý từ AI:</h6>';
-            resultHTML += `<div class="suggestion-text">${data.ai_suggestions}</div>`;
+            const formattedSuggestions = escapeHtml(data.ai_suggestions)
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+            resultHTML += `<div class="suggestion-text" style="white-space: pre-wrap; word-wrap: break-word;"><p>${formattedSuggestions}</p></div>`;
             resultHTML += '</div>';
         }
 
@@ -270,4 +287,71 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Check User Authentication
+// Check authentication and redirect if not logged in
+async function checkUserAuthAndRedirect() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/check`, {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (!data.authenticated) {
+            // Not logged in, redirect to login page
+            window.location.href = 'auth.html';
+        }
+    } catch (error) {
+        console.error('Auth check error:', error);
+        // On error, redirect to login to be safe
+        window.location.href = 'auth.html';
+    }
+}
+
+async function checkUserAuth() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/check`, {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (data.authenticated) {
+            // User is logged in
+            document.getElementById('loginLink').style.display = 'none';
+            document.getElementById('userDisplay').style.display = 'inline';
+            document.getElementById('username').textContent = data.username;
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+        } else {
+            // User is not logged in
+            document.getElementById('loginLink').style.display = 'inline-block';
+            document.getElementById('userDisplay').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error checking auth:', error);
+    }
+}
+
+// Setup Logout
+function setupLogout() {
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async function() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Redirect to login page
+                    window.location.href = 'auth.html';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+    }
 }

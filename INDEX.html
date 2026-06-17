@@ -55,10 +55,11 @@
         }
 
         .features {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: flex;
+            justify-content: center;
             gap: 30px;
             margin-top: 40px;
+            flex-wrap: wrap;
         }
 
         .feature-card {
@@ -69,6 +70,8 @@
             cursor: pointer;
             transition: all 0.3s ease;
             border: 2px solid transparent;
+            min-width: 350px;
+            max-width: 450px;
         }
 
         .feature-card:hover {
@@ -163,7 +166,8 @@
 
         @media (max-width: 768px) {
             .features {
-                grid-template-columns: 1fr;
+                flex-direction: column;
+                align-items: center;
             }
 
             .header h1 {
@@ -172,6 +176,11 @@
 
             .container-main {
                 padding: 30px;
+            }
+
+            .feature-card {
+                min-width: 100%;
+                max-width: 100%;
             }
         }
 
@@ -222,20 +231,14 @@
         <!-- Features -->
         <div class="features">
             <!-- Analyze Card -->
-            <div class="feature-card analyze" onclick="openPage('frontend/index.html')">
+            <div class="feature-card analyze" onclick="checkAuthAndGo('frontend/index.html')">
                 <div class="feature-icon">📊</div>
                 <h3>Phân Tích Code</h3>
                 <p>Nhập code C, biên dịch, chạy test, và nhận phân tích lỗi tự động từ AI</p>
                 <button class="btn-feature">Mở ngay →</button>
             </div>
 
-            <!-- Learning Card -->
-            <div class="feature-card learning" onclick="openPage('frontend/learning.html')">
-                <div class="feature-icon">📚</div>
-                <h3>Học Tập Tương Tác</h3>
-                <p>Giải các bài tập lỗi lập trình, nhận gợi ý từng bước, và phát triển kỹ năng</p>
-                <button class="btn-feature">Mở ngay →</button>
-            </div>
+            <!-- Learning Card removed per user request -->
         </div>
 
         <!-- Footer Info -->
@@ -246,6 +249,35 @@
     </div>
 
     <script>
+        // Check authentication and open page
+        async function checkAuthAndGo(filename) {
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/check', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    // User is logged in, go to analyzer
+                    const currentPath = window.location.href;
+                    const baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                    window.location.href = baseUrl + '/' + filename;
+                } else {
+                    // Not logged in, redirect to login
+                    const currentPath = window.location.href;
+                    const baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                    window.location.href = baseUrl + '/frontend/auth.html';
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                // On error, redirect to login to be safe
+                const currentPath = window.location.href;
+                const baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                window.location.href = baseUrl + '/frontend/auth.html';
+            }
+        }
+
         // Open page function
         function openPage(filename) {
             // Get the directory of current file

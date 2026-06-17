@@ -14,12 +14,23 @@ class Config:
     JSON_SORT_KEYS = False
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max
     
+    # Session configuration
+    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+    SESSION_COOKIE_SECURE = False  # Set True in production with HTTPS
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = 86400  # 24 hours
+    
     # API Keys
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+    OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+    GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
+    # Note: OpenRouter support removed
     
     # CORS
-    CORS_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", 
+    CORS_ORIGINS = ["http://localhost:5000", "http://127.0.0.1:5000", 
                     "file://"]
+    
 
 
 class DevelopmentConfig(Config):

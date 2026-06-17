@@ -13,90 +13,90 @@
         <div class="container-fluid">
             <span class="navbar-brand mb-0 h1">🔧 C Code Analyzer</span>
             <span class="navbar-text text-muted">Phân tích & Gợi ý sửa lỗi mã C</span>
+            <div class="navbar-text">
+                <span id="userDisplay" style="display: none; margin-right: 15px;">
+                    👤 <span id="username"></span>
+                </span>
+                <a href="auth.html" id="loginLink" class="btn btn-sm btn-primary">Đăng nhập</a>
+                <button id="logoutBtn" class="btn btn-sm btn-secondary" style="display: none; margin-left: 10px;">Đăng xuất</button>
+            </div>
         </div>
     </nav>
 
     <div class="container-fluid mt-4">
+        <!-- Row 1: Code Editor + Test Cases -->
         <div class="row">
             <!-- Left: Code Editor -->
-            <div class="col-md-6">
-                <div class="card">
+            <div class="col-lg-7">
+                <div class="card h-100">
                     <div class="card-header bg-primary text-white">
                         <h5 class="mb-0">📝 Mã C</h5>
                     </div>
                     <div class="card-body p-0">
-                        <textarea id="codeEditor" class="form-control border-0" style="height: 500px; font-family: monospace; resize: none;" placeholder="Nhập mã C tại đây...">int main() {
+                        <textarea id="codeEditor" class="form-control border-0" style="height: 400px; font-family: monospace; resize: none;" placeholder="Nhập mã C tại đây...">#include &lt;stdio.h&gt;
+
+int main() {
     int sum = 0;
-    for (int i = 1; i < 5; i++) {
+    for (int i = 1; i &lt; 5; i++) {
         sum += i;
     }
     printf("Sum: %d\\n", sum);
     return 0;
 }</textarea>
                     </div>
-                    <div class="card-footer">
-                        <button class="btn btn-success btn-sm" id="compileBtn">
-                            <span class="spinner-border spinner-border-sm d-none" id="compileSpinner" role="status" aria-hidden="true"></span>
-                            ✓ Biên dịch
-                        </button>
-                        <button class="btn btn-info btn-sm" id="runBtn" data-bs-toggle="modal" data-bs-target="#runModal">
-                            ▶ Chạy
-                        </button>
-                        <button class="btn btn-primary btn-sm" id="analyzeBtn">
-                            <span class="spinner-border spinner-border-sm d-none" id="analyzeSpinner" role="status" aria-hidden="true"></span>
-                            🔍 Phân tích
-                        </button>
-                        <button class="btn btn-secondary btn-sm" id="clearBtn">
-                            🗑 Clear
-                        </button>
+                    <div class="card-footer d-flex align-items-center gap-2">
+                        <input type="file" id="fileInput" accept=".c,.txt" class="d-none">
+                        <button class="btn btn-outline-info btn-sm" id="openFileBtn">📂 Mở file</button>
+                        <span id="fileNameDisplay" class="text-muted small"></span>
+
+                        <div class="ms-auto">
+                            <select id="aiProviderSelect" class="form-select form-select-sm me-2" style="width:180px; display:inline-block; vertical-align: middle;">
+                                <option value="gemini">AI: Gemini</option>
+                                <option value="openrouter">AI: OpenRouter</option>
+                                <option value="groq">AI: Groq</option>
+                            </select>
+                            <button class="btn btn-success btn-sm" id="compileBtn">
+                                <span class="spinner-border spinner-border-sm d-none" id="compileSpinner" role="status" aria-hidden="true"></span>
+                                ✓ Biên dịch
+                            </button>
+                            <button class="btn btn-primary btn-sm" id="analyzeBtn">
+                                <span class="spinner-border spinner-border-sm d-none" id="analyzeSpinner" role="status" aria-hidden="true"></span>
+                                🔍 Phân tích
+                            </button>
+                            <button class="btn btn-secondary btn-sm" id="clearBtn">
+                                🗑 Clear
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right: Results -->
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">📊 Kết quả</h5>
-                    </div>
-                    <div class="card-body" id="resultsContainer" style="height: 550px; overflow-y: auto;">
-                        <p class="text-muted">Kết quả sẽ hiển thị tại đây...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Test Cases Section -->
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header bg-warning">
+            <!-- Right: Test Cases -->
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header bg-warning text-dark">
                         <h5 class="mb-0">🧪 Test Cases</h5>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" style="overflow-y: auto; max-height: 460px;">
                         <div id="testCasesContainer"></div>
-                        <button class="btn btn-outline-primary btn-sm" id="addTestCaseBtn">+ Thêm Test Case</button>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-outline-primary btn-sm w-100" id="addTestCaseBtn">+ Thêm Test Case</button>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Run Modal -->
-    <div class="modal fade" id="runModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Chạy chương trình</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <label class="form-label">Nhập Input:</label>
-                    <textarea id="programInput" class="form-control" style="height: 150px;" placeholder="Nhập input cho chương trình..."></textarea>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
-                    <button type="button" class="btn btn-primary" id="executeBtn">Chạy</button>
+        <!-- Row 2: Analysis Results Section -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">💡 Phân tích & Gợi ý</h5>
+                    </div>
+                    <div class="card-body" id="resultsContainer" style="min-height: 250px; overflow-y: auto;">
+                        <p class="text-muted">Kết quả phân tích sẽ hiển thị ở đây...</p>
+                    </div>
                 </div>
             </div>
         </div>

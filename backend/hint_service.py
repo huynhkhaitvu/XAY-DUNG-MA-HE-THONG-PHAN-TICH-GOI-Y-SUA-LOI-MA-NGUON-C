@@ -36,8 +36,8 @@ class HintService:
             code, bug_type, bug_taxonomy_id, requirements, test_cases
         )
         
-        # Call AI với prompt cụ thể
-        response = self.ai_handler._call_gemini(prompt)
+        # Call AI với prompt cụ thể (yêu cầu JSON) -> không strip code/blocks
+        response = self.ai_handler._call_gemini(prompt, strip_code=False)
         
         # Parse response
         try:

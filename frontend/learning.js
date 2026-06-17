@@ -1,15 +1,67 @@
 // Interactive Learning System JavaScript
 
-const API_BASE_URL = 'http://localhost:5000/api/interactive';
+// Use explicit backend host for API paths to avoid conflicts with services on port 8000
+const API_BASE_URL = `http://127.0.0.1:5000/api/interactive`;
+const AUTH_API_BASE = `http://127.0.0.1:5000/api/auth`;
 let currentAttemptId = null;
 let currentBugTaxonomyId = null;
 let originalCode = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
+    checkAuthentication();
     setupEventListeners();
     showStartModal();
 });
+
+// Check if user is authenticated
+async function checkAuthentication() {
+    try {
+        const aiProviderEl = document.getElementById('aiProviderSelect');
+        const aiProvider = aiProviderEl ? aiProviderEl.value : 'gemini';
+
+        const response = await fetch(`${AUTH_API_BASE}/check`, {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (data.authenticated) {
+            // Get user profile
+            const profileResponse = await fetch(`${AUTH_API_BASE}/profile`, {
+                credentials: 'include'
+            });
+            const profileData = await profileResponse.json();
+            
+            if (profileData.success && profileData.user) {
+                document.getElementById('userUsername').textContent = profileData.user.username || '-';
+                document.getElementById('userEmail').textContent = profileData.user.email || '-';
+            }
+        } else {
+            // Redirect to login
+            window.location.href = 'auth.html';
+        }
+    } catch (error) {
+        console.log('Auth check error:', error);
+        window.location.href = 'auth.html';
+    }
+}
+
+// Handle logout
+async function handleLogout() {
+    try {
+        const response = await fetch(`${AUTH_API_BASE}/logout`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            window.location.href = 'auth.html';
+        }
+    } catch (error) {
+        console.log('Logout error:', error);
+        window.location.href = 'auth.html';
+    }
+}
 
 function setupEventListeners() {
     document.getElementById('hintLevel1Btn').addEventListener('click', () => getHint(1));
@@ -61,7 +113,8 @@ async function startLearning() {
                 problem_id: 'prob_' + Date.now(),
                 code: code,
                 requirements: requirements,
-                testcases: testcases
+                testcases: testcases,
+                ai_provider: aiProvider
             })
         });
         

@@ -8,11 +8,76 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
-        .learning-container {
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        
+        .top-bar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .top-bar h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-info {
+            text-align: right;
+            font-size: 14px;
+        }
+        
+        .user-info .username {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .user-info .email {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: white;
+        }
+        
+        .main-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
-            height: 100vh;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+            padding: 20px;
+        }
+        .learning-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            height: 100%;
             overflow: hidden;
         }
         
@@ -131,14 +196,24 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark bg-dark">
-        <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1">🎓 Interactive C Learning</span>
-            <span class="text-muted">Học sửa lỗi bằng hints hướng dẫn</span>
+    <!-- Top Navigation Bar with User Info -->
+    <div class="top-bar">
+        <h1>🎓 Interactive C Learning</h1>
+        <div class="user-section">
+            <div class="user-info">
+                <div class="username" id="userUsername">-</div>
+                <div class="email" id="userEmail">-</div>
+            </div>
+            <select id="aiProviderSelect" class="form-select form-select-sm" style="width:180px; margin-right:10px;">
+                <option value="gemini">AI: Gemini</option>
+                <option value="openrouter">AI: OpenRouter</option>
+                <option value="groq">AI: Groq</option>
+            </select>
+            <button class="logout-btn" onclick="handleLogout()">Đăng xuất</button>
         </div>
-    </nav>
+    </div>
 
-    <div class="learning-container">
+    <div class="main-container">
         <!-- Left Panel: Code Editor -->
         <div class="panel">
             <div class="panel-header">
