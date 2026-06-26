@@ -1,13 +1,13 @@
 """
 Database Manager
-Quản lý lưu trữ attempts và users
+Quản lý lưu trữ users, code submissions và AI analysis
 """
 import json
 import sqlite3
+import secrets
 from datetime import datetime
 from pathlib import Path
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import Attempt, AttemptStep, Hint
 
 
 class DatabaseManager:
@@ -21,6 +21,10 @@ class DatabaseManager:
         """Khởi tạo database"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+
+        obsolete_tables = ['problems', 'test_cases', 'hints', 'attempts', 'attempt_steps']
+        for table_name in obsolete_tables:
+            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
         
         # Create users table
         cursor.execute("""
@@ -50,43 +54,6 @@ class DatabaseManager:
             if col not in existing_cols:
                 cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
         
-        # Create attempts table if not exists
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS attempts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT,
-                problem_id TEXT NOT NULL,
-                original_code TEXT NOT NULL,
-                bug_type TEXT,
-                current_code TEXT,
-                attempt_number INTEGER,
-                hints_viewed TEXT,
-                current_hint_index INTEGER,
-                tests_passed INTEGER DEFAULT 0,
-                tests_total INTEGER,
-                is_solved BOOLEAN DEFAULT 0,
-                start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                completed_time TIMESTAMP
-            )
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS attempt_steps (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                attempt_id INTEGER NOT NULL,
-                step_number INTEGER,
-                action_type TEXT,
-                code_before TEXT,
-                code_after TEXT,
-                hint_id TEXT,
-                hint_text TEXT,
-                test_results TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (attempt_id) REFERENCES attempts(id)
-            )
-        """)
-
         # Create code submissions table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS code_submissions (
@@ -116,175 +83,6 @@ class DatabaseManager:
         
         conn.commit()
         conn.close()
-    
-    def save_attempt(self, attempt: Attempt):
-        """Lưu attempt mới"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO attempts 
-            (user_id, problem_id, original_code, bug_type, current_code, 
-             attempt_number, hints_viewed, current_hint_index, tests_passed, 
-             tests_total, is_solved)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            attempt.user_id,
-            attempt.problem_id,
-            attempt.original_code,
-            attempt.bug_type,
-            attempt.current_code,
-            attempt.attempt_number,
-            json.dumps(attempt.hints_viewed),
-            attempt.current_hint_index,
-            attempt.tests_passed,
-            attempt.tests_total,
-            attempt.is_solved
-        ))
-        
-        attempt.id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return attempt.id
-    
-    def update_attempt(self, attempt: Attempt):
-        """Cập nhật attempt"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            UPDATE attempts
-            SET current_code = ?, 
-                hints_viewed = ?,
-                current_hint_index = ?,
-                tests_passed = ?,
-                tests_total = ?,
-                is_solved = ?,
-                last_modified = CURRENT_TIMESTAMP,
-                completed_time = ?
-            WHERE id = ?
-        """, (
-            attempt.current_code,
-            json.dumps(attempt.hints_viewed),
-            attempt.current_hint_index,
-            attempt.tests_passed,
-            attempt.tests_total,
-            attempt.is_solved,
-            attempt.completed_time,
-            attempt.id
-        ))
-        
-        conn.commit()
-        conn.close()
-    
-    def save_step(self, attempt_id: int, step: AttemptStep):
-        """Lưu một step trong attempt"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO attempt_steps
-            (attempt_id, step_number, action_type, code_before, code_after, 
-             hint_id, hint_text, test_results)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            attempt_id,
-            step.step_number,
-            step.action_type,
-            step.code_before,
-            step.code_after,
-            step.hint_id,
-            step.hint_text,
-            json.dumps(step.test_results)
-        ))
-        
-        step.id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return step.id
-    
-    def get_attempt(self, attempt_id: int) -> dict:
-        """Lấy thông tin attempt"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM attempts WHERE id = ?", (attempt_id,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if not row:
-            return None
-        
-        return dict(row)
-    
-    def get_attempt_steps(self, attempt_id: int) -> list:
-        """Lấy tất cả steps của một attempt"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT * FROM attempt_steps WHERE attempt_id = ? ORDER BY step_number",
-            (attempt_id,)
-        )
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-    
-    def get_user_attempts(self, user_id: str, problem_id: str = None) -> list:
-        """Lấy tất cả attempts của user"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        if problem_id:
-            cursor.execute(
-                "SELECT * FROM attempts WHERE user_id = ? AND problem_id = ? ORDER BY start_time DESC",
-                (user_id, problem_id)
-            )
-        else:
-            cursor.execute(
-                "SELECT * FROM attempts WHERE user_id = ? ORDER BY start_time DESC",
-                (user_id,)
-            )
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-    
-    def get_statistics(self, attempt_id: int) -> dict:
-        """Lấy thống kê của 1 attempt"""
-        attempt = self.get_attempt(attempt_id)
-        steps = self.get_attempt_steps(attempt_id)
-        
-        if not attempt:
-            return None
-        
-        start_time = datetime.fromisoformat(attempt['start_time'])
-        last_modified = datetime.fromisoformat(attempt['last_modified'])
-        duration = (last_modified - start_time).total_seconds() / 60  # minutes
-        
-        hint_views = len([s for s in steps if s['action_type'] == 'view_hint'])
-        code_modifications = len([s for s in steps if s['action_type'] == 'modify_code'])
-        tests_run = len([s for s in steps if s['action_type'] == 'test'])
-        
-        return {
-            'attempt_id': attempt_id,
-            'duration_minutes': round(duration, 2),
-            'total_steps': len(steps),
-            'hints_viewed': hint_views,
-            'code_modifications': code_modifications,
-            'tests_run': tests_run,
-            'tests_passed': attempt['tests_passed'],
-            'tests_total': attempt['tests_total'],
-            'is_solved': bool(attempt['is_solved']),
-            'success_rate': round(attempt['tests_passed'] / attempt['tests_total'] * 100, 1) if attempt['tests_total'] > 0 else 0
-        }
 
     # ============ CODE SUBMISSIONS / AI ANALYSIS ============
 
@@ -418,3 +216,80 @@ class DatabaseManager:
             }
         else:
             return {'success': False, 'error': 'Password không chính xác'}
+
+    def get_user_by_email(self, email: str) -> dict:
+        """Lấy thông tin user bằng email"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        return dict(row) if row else None
+
+    def get_or_create_google_user(self, email: str, full_name: str = '') -> dict:
+        """Tìm hoặc tạo user từ Google OAuth
+        
+        Args:
+            email: Email từ Google
+            full_name: Tên đầy đủ từ Google
+        
+        Returns: 
+            {
+                'success': bool,
+                'user_id': id của user,
+                'username': username,
+                'email': email,
+                'is_new': True nếu vừa tạo, False nếu tìm thấy
+            }
+        """
+        try:
+            # Tìm user có email này
+            user = self.get_user_by_email(email)
+            
+            if user:
+                # User đã tồn tại
+                return {
+                    'success': True,
+                    'user_id': user['id'],
+                    'username': user['username'],
+                    'email': user['email'],
+                    'is_new': False
+                }
+            
+            # Tạo user mới từ Google
+            # Username: lấy từ email prefix (trước @)
+            username_base = email.split('@')[0]
+            username = username_base
+            
+            # Kiểm tra username đã tồn tại chưa
+            counter = 1
+            while self.get_user_by_username(username):
+                username = f"{username_base}{counter}"
+                counter += 1
+            
+            # Tạo password random (vì Google OAuth không cần password)
+            random_password = secrets.token_urlsafe(16)
+            
+            # Lưu metadata rằng đây là Google user
+            metadata = json.dumps({'auth_provider': 'google'})
+            
+            # Đăng ký user mới
+            result = self.register_user(
+                username=username,
+                email=email,
+                password=random_password,
+                full_name=full_name,
+                metadata=metadata
+            )
+            
+            if result['success']:
+                result['is_new'] = True
+                return result
+            else:
+                return result
+                
+        except Exception as e:
+            return {'success': False, 'error': str(e)}

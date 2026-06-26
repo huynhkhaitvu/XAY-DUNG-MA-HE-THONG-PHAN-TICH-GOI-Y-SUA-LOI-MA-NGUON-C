@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 from config import get_config
 from analyzer import CodeAnalyzer
 from ai_handler import AIHandler
-from hint_service import HintService
 from utils import validate_c_syntax, detect_common_errors
 from utils import sanitize_ai_response
 import json
@@ -44,7 +43,6 @@ ai_handler = AIHandler(
     openrouter_key=app.config.get('OPENROUTER_API_KEY', ''),
     groq_key=app.config.get('GROQ_API_KEY', '')
 )
-hint_service = HintService(ai_handler)
 
 # Log whether AI keys are present (do not print actual secrets)
 print(f"[config] GEMINI_API_KEY set={bool(app.config.get('GEMINI_API_KEY'))}")
@@ -66,12 +64,7 @@ except Exception as e:
 # Gắn services vào app context để có thể truy cập từ routes
 app.analyzer = analyzer
 app.ai_handler = ai_handler
-app.hint_service = hint_service
 app.db = db
-
-# Import và register blueprints
-from learning_routes import interactive_bp
-app.register_blueprint(interactive_bp)
 
 
 @app.route('/api/health', methods=['GET'])
@@ -388,6 +381,38 @@ def login():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/auth/google-login', methods=['POST'])
+def google_login():
+    """Đăng nhập bằng Google OAuth - Tự động tạo user nếu chưa tồn tại"""
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip()
+        full_name = data.get('full_name', '')
+        
+        if not email:
+            return jsonify({'success': False, 'error': 'Email không hợp lệ'}), 400
+        
+        # Tìm hoặc tạo user từ Google
+        result = db.get_or_create_google_user(email, full_name)
+        
+        if result['success']:
+            # Save user_id in session
+            session.permanent = True
+            session['user_id'] = result['user_id']
+            session['username'] = result['username']
+            return jsonify({
+                'success': True, 
+                'username': result['username'], 
+                'user_id': result['user_id'],
+                'is_new': result.get('is_new', False)
+            }), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/auth/profile', methods=['GET'])
 def get_profile():
     """Lấy thông tin profile của user đang đăng nhập"""
@@ -440,16 +465,15 @@ def check_auth():
 # This route is registered after all API routes to avoid catching `/api/*` requests.
 @app.route('/')
 def serve_root():
-    # Serve the default frontend page directly to avoid Werkzeug's automatic
-    # redirect behaviour for ambiguous routes.
+    # Serve the main analysis page directly.
     base_dir = os.path.dirname(__file__)
     frontend_dir = os.path.abspath(os.path.join(base_dir, 'frontend'))
     if not os.path.isdir(frontend_dir):
         frontend_dir = os.path.abspath(os.path.join(base_dir, '..', 'frontend'))
 
-    print(f"[serve_root] serving learning.html from {frontend_dir}")
+    print(f"[serve_root] serving index.html from {frontend_dir}")
     print(f"[url_map] {app.url_map}")
-    return send_from_directory(frontend_dir, 'learning.html')
+    return send_from_directory(frontend_dir, 'index.html')
 
 
 @app.route('/<path:path>')

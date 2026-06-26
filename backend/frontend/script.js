@@ -26,7 +26,12 @@ async function checkBackendConnection() {
 // Event Listeners
 function initializeEventListeners() {
     document.getElementById('compileBtn').addEventListener('click', handleCompile);
-    document.getElementById('analyzeBtn').addEventListener('click', handleAnalyze);
+    document.getElementById('runBtn').addEventListener('click', handleRun);
+    document.getElementById('analyzeBtn').addEventListener('click', openRequirementsModal);
+    const requirementsAnalyzeBtn = document.getElementById('requirementsAnalyzeBtn');
+    if (requirementsAnalyzeBtn) {
+        requirementsAnalyzeBtn.addEventListener('click', handleRequirementsAnalyze);
+    }
     document.getElementById('clearBtn').addEventListener('click', handleClear);
     document.getElementById('addTestCaseBtn').addEventListener('click', handleAddTestCase);
     // File open button handlers
@@ -68,6 +73,37 @@ function handleFileSelect(event) {
 // Get code
 function getCode() {
     return document.getElementById('codeEditor').value;
+}
+
+function openRequirementsModal() {
+    const modalElement = document.getElementById('requirementsModal');
+    if (!modalElement) {
+        showError('Không tìm thấy hộp nhập đề bài');
+        return;
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    modal.show();
+    setTimeout(() => {
+        const input = document.getElementById('requirementsInput');
+        if (input) input.focus();
+    }, 150);
+}
+
+async function handleRequirementsAnalyze() {
+    const requirements = document.getElementById('requirementsInput')?.value.trim() || '';
+    if (!requirements) {
+        showError('Vui lòng nhập đề bài trước khi phân tích');
+        return;
+    }
+
+    const modalElement = document.getElementById('requirementsModal');
+    if (modalElement) {
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) modal.hide();
+    }
+
+    await handleAnalyze(requirements);
 }
 
 // Get test cases
@@ -142,6 +178,61 @@ function showCompileResult(data) {
     resultsContainer.innerHTML = html;
 }
 
+async function handleRun() {
+    const code = getCode();
+    if (!code.trim()) {
+        showError('Vui lòng nhập mã C');
+        return;
+    }
+
+    const testCases = getTestCases();
+    const inputData = testCases.length > 0 ? (testCases[0].input || '') : '';
+
+    showLoading('runSpinner');
+    try {
+        const response = await fetch(`${API_BASE_URL}/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, input: inputData })
+        });
+
+        const data = await response.json();
+        hideLoading('runSpinner');
+
+        showRunResult(data);
+        if (data.success) {
+            showSuccess('✓ Chạy chương trình thành công');
+        } else {
+            showError(data.error || 'Chạy chương trình thất bại');
+        }
+    } catch (error) {
+        hideLoading('runSpinner');
+        showError('Lỗi kết nối: ' + error.message);
+    }
+}
+
+function showRunResult(data) {
+    const resultsContainer = document.getElementById('resultsContainer');
+    if (!resultsContainer) return;
+
+    let html = '';
+    if (data.success) {
+        html = `
+            <div class="alert alert-success alert-custom">✓ Chạy chương trình thành công</div>
+            ${data.output ? `<div class="mb-2"><strong>Output:</strong></div><pre class="mt-2 p-3 bg-dark text-light rounded">${escapeHtml(data.output)}</pre>` : '<div class="text-muted">Chương trình không in ra gì.</div>'}
+            ${data.error ? `<div class="mt-3"><strong>Stderr:</strong><pre class="mt-2 p-3 bg-dark text-light rounded">${escapeHtml(data.error)}</pre></div>` : ''}
+        `;
+    } else {
+        html = `
+            <div class="alert alert-danger alert-custom">✗ Chạy chương trình thất bại</div>
+            ${data.error ? `<div class="mb-2"><strong>Lỗi:</strong></div><pre class="mt-2 p-3 bg-dark text-light rounded">${escapeHtml(data.error)}</pre>` : ''}
+            ${data.compile_output ? `<div class="mt-3"><strong>Compile output:</strong><pre class="mt-2 p-3 bg-dark text-light rounded">${escapeHtml(data.compile_output)}</pre></div>` : ''}
+        `;
+    }
+
+    resultsContainer.innerHTML = html;
+}
+
 function escapeHtml(text) {
     return String(text)
         .replace(/&/g, '&amp;')
@@ -152,7 +243,7 @@ function escapeHtml(text) {
 }
 
 // Handle Analyze
-async function handleAnalyze() {
+async function handleAnalyze(requirements = '') {
     const code = getCode();
     const testcases = getTestCases();
 
@@ -169,7 +260,7 @@ async function handleAnalyze() {
         const response = await fetch(`${API_BASE_URL}/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, testcases, ai_provider: aiProvider })
+            body: JSON.stringify({ code, testcases, requirements, ai_provider: aiProvider })
         });
 
         const data = await response.json();
@@ -233,16 +324,6 @@ async function handleAnalyze() {
                 .replace(/\n/g, '<br>');
             resultHTML += `<div class="suggestion-text" style="white-space: pre-wrap; word-wrap: break-word;"><p>${formattedSuggestions}</p></div>`;
             resultHTML += '</div>';
-        }
-
-        // Errors
-        if (data.errors && data.errors.length > 0) {
-            resultHTML += '<div class="alert alert-error alert-custom mt-3">';
-            resultHTML += '<strong>Lỗi:</strong><ul>';
-            data.errors.forEach(err => {
-                resultHTML += `<li>${escapeHtml(err)}</li>`;
-            });
-            resultHTML += '</ul></div>';
         }
 
         if (!resultHTML.trim()) {
