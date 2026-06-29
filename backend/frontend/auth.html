@@ -6,284 +6,145 @@
     <title>Đăng nhập / Đăng ký - Hệ thống phân tích mã C</title>
     <link rel="stylesheet" href="style.css">
     <style>
+        body {
+            margin: 0;
+            font-family: Inter, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f4f4f5;
+            color: #111111;
+        }
         .auth-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
             min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        
-        .auth-box {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            width: 100%;
-            max-width: 400px;
-            padding: 40px;
-        }
-        
-        .auth-title {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #333;
-            font-size: 24px;
-            font-weight: bold;
-        }
-        
-        .auth-form {
-            display: none;
-        }
-        
-        .auth-form.active {
-            display: block;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        
-        .form-group input {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-            box-sizing: border-box;
-            transition: border-color 0.3s;
-        }
-        
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
-        }
-        
-        .form-group input.error {
-            border-color: #dc3545;
-        }
-        
-        .error-message {
-            color: #dc3545;
-            font-size: 13px;
-            margin-top: 5px;
-            display: none;
-        }
-        
-        .error-message.show {
-            display: block;
-        }
-        
-        .success-message {
-            color: #28a745;
-            font-size: 13px;
-            margin-top: 5px;
-            display: none;
-            background: #d4edda;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .success-message.show {
-            display: block;
-        }
-        
-        .btn {
-            width: 100%;
-            padding: 12px;
-            margin-top: 20px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-primary:active {
-            transform: translateY(0);
-        }
-        
-        .btn-secondary {
-            background: #f0f0f0;
-            color: #333;
-            margin-top: 10px;
-        }
-        
-        .btn-secondary:hover {
-            background: #e0e0e0;
-        }
-        
-        .form-footer {
-            text-align: center;
-            margin-top: 20px;
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .form-footer a {
-            color: #667eea;
-            cursor: pointer;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        
-        .form-footer a:hover {
-            text-decoration: underline;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            color: #667eea;
-        }
-        
-        .loading.show {
-            display: block;
-        }
-        
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            margin: 10px auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .divider {
-            display: flex;
-            align-items: center;
-            margin: 20px 0;
-            color: #999;
-        }
-
-        .divider:before,
-        .divider:after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: #ddd;
-        }
-
-        .divider:before {
-            margin-right: 10px;
-        }
-
-        .divider:after {
-            margin-left: 10px;
-        }
-
-        .btn-google {
-            background: white;
-            border: 1px solid #ddd;
-            color: #333;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            font-weight: 600;
+            padding: 24px;
         }
-
-        .btn-google:hover {
-            background: #f9f9f9;
-            border-color: #ccc;
+        .auth-card {
+            width: min(980px, 100%);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: white;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.15);
         }
-
-        .google-icon {
-            width: 20px;
-            height: 20px;
+        .auth-side {
+            background: linear-gradient(135deg, #111111 0%, #222222 100%);
+            color: white;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
+        .auth-badge { display: inline-block; width: fit-content; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.16); font-weight: 600; margin-bottom: 18px; }
+        .auth-side h1 { font-size: 1.8rem; margin: 0 0 10px; color: white; }
+        .auth-side p { line-height: 1.6; color: rgba(255,255,255,0.9); }
+        .auth-side ul { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 8px; }
+        .auth-form-panel { padding: 36px 32px; color: #111111; }
+        .auth-title { margin: 0 0 20px; font-size: 1.5rem; color: #111111; }
+        .auth-form { display: none; }
+        .auth-form.active { display: block; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; margin-bottom: 6px; color: #111111; font-weight: 600; font-size: 0.95rem; }
+        .form-group input, .form-group select { width: 100%; padding: 11px 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box; color: #111111; background: #ffffff; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #111111; box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.12); }
+        .error-message { color: #dc3545; font-size: 0.9rem; margin-top: 6px; display: none; }
+        .error-message.show { display: block; }
+        .success-message { color: #15803d; font-size: 0.9rem; margin-top: 6px; display: none; background: #ecfdf3; padding: 10px 12px; border-radius: 10px; border: 1px solid #a7f3d0; }
+        .success-message.show { display: block; }
+        .btn { width: 100%; padding: 12px; margin-top: 16px; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 700; cursor: pointer; }
+        .btn-primary { background: #111111; color: white; }
+        .btn-primary:hover { box-shadow: 0 10px 24px rgba(17, 17, 17, 0.18); }
+        .btn-secondary { background: #f1f5f9; color: #111111; }
+        .form-footer { text-align: center; margin-top: 18px; color: #4b5563; font-size: 0.95rem; }
+        .form-footer a { color: #111111; cursor: pointer; text-decoration: none; font-weight: 700; }
+        .loading { display: none; text-align: center; color: #111111; }
+        .loading.show { display: block; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #111111; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 10px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+        .divider { display: flex; align-items: center; margin: 20px 0; color: #6b7280; }
+        .divider:before, .divider:after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
+        .divider:before { margin-right: 10px; }
+        .divider:after { margin-left: 10px; }
+        .btn-google { background: white; border: 1px solid #d1d5db; color: #111111; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 600; }
+        .btn-google:hover { background: #f8fafc; }
+        .google-icon { width: 20px; height: 20px; }
+        @media (max-width: 768px) { .auth-card { grid-template-columns: 1fr; } .auth-side { padding: 28px; } .auth-form-panel { padding: 24px 20px; } }
     </style>
 </head>
 <body>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <div class="auth-container">
-        <div class="auth-box">
-            <!-- Login Form -->
-            <div id="loginForm" class="auth-form active">
-                <h2 class="auth-title">Đăng Nhập</h2>
-                <form onsubmit="handleLogin(event)">
-                    <div class="form-group">
-                        <label for="loginUsername">Tên đăng nhập</label>
-                        <input type="text" id="loginUsername" required placeholder="Nhập tên đăng nhập">
-                    </div>
-                    <div class="form-group">
-                        <label for="loginPassword">Mật khẩu</label>
-                        <input type="password" id="loginPassword" required placeholder="Nhập mật khẩu">
-                    </div>
-                    <div id="loginError" class="error-message"></div>
-                    <div id="loginSuccess" class="success-message"></div>
-                    <div id="loginLoading" class="loading">
-                        <div class="spinner"></div>
-                        <p>Đang xử lý...</p>
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="loginBtn">Đăng Nhập</button>
-                </form>
-                <div class="divider">Hoặc</div>
-                <div id="googleLoginButton"></div>
-                <div class="form-footer">
-                    Chưa có tài khoản? <a onclick="toggleForm('signup')">Đăng ký ngay</a>
-                </div>
+        <div class="auth-card">
+            <div class="auth-side">
+                <div class="auth-badge">C Code Analyzer</div>
+                <h1>Học C một cách chủ động</h1>
+                <p>Đăng nhập để tiếp tục làm bài, chạy mã và nhận trợ giúp đúng trọng tâm.</p>
+                <ul>
+                    <li>✅ Chọn đề bài dễ dàng</li>
+                    <li>✅ Biên dịch và chạy ngay trong giao diện</li>
+                    <li>✅ Hỗ trợ học sinh và giáo viên</li>
+                </ul>
             </div>
+            <div class="auth-form-panel">
+                <div id="loginForm" class="auth-form active">
+                    <h2 class="auth-title">Đăng Nhập</h2>
+                    <form onsubmit="handleLogin(event)">
+                        <div class="form-group">
+                            <label for="loginUsername">Tên đăng nhập</label>
+                            <input type="text" id="loginUsername" required placeholder="Nhập tên đăng nhập">
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Mật khẩu</label>
+                            <input type="password" id="loginPassword" required placeholder="Nhập mật khẩu">
+                        </div>
+                        <div id="loginError" class="error-message"></div>
+                        <div id="loginSuccess" class="success-message"></div>
+                        <div id="loginLoading" class="loading">
+                            <div class="spinner"></div>
+                            <p>Đang xử lý...</p>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="loginBtn">Đăng Nhập</button>
+                    </form>
+                    <div class="divider">Hoặc</div>
+                    <div id="googleLoginButton"></div>
+                    <div class="form-footer">
+                        Chưa có tài khoản? <a onclick="toggleForm('signup')">Đăng ký ngay</a>
+                    </div>
+                </div>
 
-            <!-- Signup Form -->
-            <div id="signupForm" class="auth-form">
-                <h2 class="auth-title">Đăng Ký</h2>
-                <form onsubmit="handleSignup(event)">
-                    <div class="form-group">
-                        <label for="signupUsername">Tên đăng nhập</label>
-                        <input type="text" id="signupUsername" required placeholder="Ít nhất 3 ký tự" minlength="3">
+                <div id="signupForm" class="auth-form">
+                    <h2 class="auth-title">Đăng Ký</h2>
+                    <form onsubmit="handleSignup(event)">
+                        <div class="form-group">
+                            <label for="signupUsername">Tên đăng nhập</label>
+                            <input type="text" id="signupUsername" required placeholder="Ít nhất 3 ký tự" minlength="3">
+                        </div>
+                        <div class="form-group">
+                            <label for="signupEmail">Email</label>
+                            <input type="email" id="signupEmail" required placeholder="Nhập email">
+                        </div>
+                        <div class="form-group">
+                            <label for="signupPassword">Mật khẩu</label>
+                            <input type="password" id="signupPassword" required placeholder="Ít nhất 6 ký tự" minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label for="signupPasswordConfirm">Xác nhận mật khẩu</label>
+                            <input type="password" id="signupPasswordConfirm" required placeholder="Nhập lại mật khẩu">
+                        </div>
+                        <div id="signupError" class="error-message"></div>
+                        <div id="signupSuccess" class="success-message"></div>
+                        <div id="signupLoading" class="loading">
+                            <div class="spinner"></div>
+                            <p>Đang xử lý...</p>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="signupBtn">Đăng Ký</button>
+                    </form>
+                    <div class="divider">Hoặc</div>
+                    <div id="googleSignupButton"></div>
+                    <div class="form-footer">
+                        Đã có tài khoản? <a onclick="toggleForm('login')">Đăng nhập</a>
                     </div>
-                    <div class="form-group">
-                        <label for="signupEmail">Email</label>
-                        <input type="email" id="signupEmail" required placeholder="Nhập email">
-                    </div>
-                    <div class="form-group">
-                        <label for="signupPassword">Mật khẩu</label>
-                        <input type="password" id="signupPassword" required placeholder="Ít nhất 6 ký tự" minlength="6">
-                    </div>
-                    <div class="form-group">
-                        <label for="signupPasswordConfirm">Xác nhận mật khẩu</label>
-                        <input type="password" id="signupPasswordConfirm" required placeholder="Nhập lại mật khẩu">
-                    </div>
-                    <div id="signupError" class="error-message"></div>
-                    <div id="signupSuccess" class="success-message"></div>
-                    <div id="signupLoading" class="loading">
-                        <div class="spinner"></div>
-                        <p>Đang xử lý...</p>
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="signupBtn">Đăng Ký</button>
-                </form>
-                <div class="divider">Hoặc</div>
-                <div id="googleSignupButton"></div>
-                <div class="form-footer">
-                    Đã có tài khoản? <a onclick="toggleForm('login')">Đăng nhập</a>
                 </div>
             </div>
         </div>
@@ -372,7 +233,7 @@
                 if (data.success) {
                     showSuccess('login', 'Đăng nhập thành công! Đang chuyển hướng...');
                     setTimeout(() => {
-                        window.location.href = 'index.html';
+                        window.location.href = '/index.html';
                     }, 1500);
                 } else {
                     showError('login', data.error || 'Đăng nhập thất bại');
@@ -458,7 +319,7 @@
                 const data = await response.json();
                 
                 if (data.authenticated) {
-                    window.location.href = 'index.html';
+                    window.location.href = '/index.html';
                 }
             } catch (error) {
                 console.log('Auth check error:', error);
@@ -516,7 +377,7 @@
                         : 'Đăng nhập bằng Google thành công!';
                     showSuccess('login', message);
                     setTimeout(() => {
-                        window.location.href = 'index.html';
+                        window.location.href = '/index.html';
                     }, 1500);
                 } else {
                     showError('login', data.error || 'Đăng nhập bằng Google thất bại');

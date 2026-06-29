@@ -1,5 +1,6 @@
 """
-Ứng dụng Flask chính - Backend cho hệ thống phân tích lỗi mã C
+Ứng dụng Flask chính cho hệ thống phân tích và sửa lỗi mã C.
+Hỗ trợ 3 vai trò: admin, giaovien, hoc_sinh.
 """
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
@@ -13,55 +14,26 @@ from utils import validate_c_syntax, detect_common_errors
 from utils import sanitize_ai_response
 import json
 
-# Tải biến môi trường
 load_dotenv()
 
 app = Flask(__name__)
-
-# Load configuration
 config = get_config()
 app.config.from_object(config)
-
-# Configure session
 app.permanent_session_lifetime = timedelta(hours=24)
 
-# Enable CORS with credentials support
-# Enable CORS for the frontend origins. Use supports_credentials at the top level
-# so Access-Control-Allow-Credentials is correctly set for credentialed requests.
-CORS(app,
-     resources={r"/api/*": {
-         "origins": ["http://localhost:5000", "http://127.0.0.1:5000"],
-         "allow_headers": ["Content-Type"]
-     }},
-     supports_credentials=True)
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5000", "http://127.0.0.1:5000"], "allow_headers": ["Content-Type"]}}, supports_credentials=True)
 
-# Khởi tạo các module
 analyzer = CodeAnalyzer()
-# Initialize AI handler with both Gemini and OpenRouter keys (if available)
 ai_handler = AIHandler(
     api_key=app.config.get('GEMINI_API_KEY', ''),
     openrouter_key=app.config.get('OPENROUTER_API_KEY', ''),
     groq_key=app.config.get('GROQ_API_KEY', '')
 )
 
-# Log whether AI keys are present (do not print actual secrets)
-print(f"[config] GEMINI_API_KEY set={bool(app.config.get('GEMINI_API_KEY'))}")
-print(f"[config] OPENROUTER_API_KEY set={bool(app.config.get('OPENROUTER_API_KEY'))}")
-
-# Khởi tạo database
 from db_manager import DatabaseManager
+
 db = DatabaseManager()
 
-# Create test user if it doesn't exist
-try:
-    test_user = db.get_user_by_username('testuser')
-    if not test_user:
-        db.register_user('testuser', 'test@example.com', 'password123')
-        print('✓ Test user created: testuser/password123')
-except Exception as e:
-    print(f'⚠ Error creating test user: {e}')
-
-# Gắn services vào app context để có thể truy cập từ routes
 app.analyzer = analyzer
 app.ai_handler = ai_handler
 app.db = db
@@ -69,449 +41,586 @@ app.db = db
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Kiểm tra trạng thái server"""
     return jsonify({'status': 'ok', 'message': 'Server is running'})
-
-
-@app.route('/api/analyze', methods=['POST'])
-def analyze_code():
-    """
-    Endpoint phân tích mã C
-    Input: {
-        "code": "...",
-        "testcases": [{"input": "...", "expected_output": "..."}]
-    }
-    """
-    try:
-        data = request.get_json()
-        code = data.get('code')
-        testcases = data.get('testcases', [])
-
-        if not code:
-            return jsonify({'error': 'Code is required'}), 400
-
-        # Phân tích mã
-        analysis_result = analyzer.analyze(code, testcases)
-
-        # Chạy heuristic phát hiện lỗi tĩnh (ví dụ off-by-one, missing include...)
-        static_errors = detect_common_errors(code)
-        if static_errors:
-            # Thêm vào errors và đánh dấu has_errors để gọi AI
-            analysis_result.setdefault('errors', [])
-            analysis_result['errors'].extend(static_errors)
-            analysis_result['has_errors'] = True
-
-        # Nếu có lỗi hoặc test case thất bại, dùng AI để phân loại lỗi, phân tích và gợi ý sửa
-        # Chuẩn bị test_results cho classifier
-        test_results_for_classification = analysis_result.get('test_results', []) or []
-
-        # Nếu có lỗi biên dịch hoặc test fail, gọi AI
-        if analysis_result.get('has_errors') or any(not tr.get('passed', False) for tr in test_results_for_classification):
-            # Phân loại lỗi logic
-            try:
-                classification = ai_handler.classify_bug_type(code, data.get('requirements', ''), test_results_for_classification)
-            except Exception:
-                classification = {'bug_type_id': 'CF001', 'bug_type_name': 'Unknown', 'confidence': 0}
-
-            # Gợi ý chi tiết (analysis + fix) từ AI
-            error_message = ''
-            if analysis_result.get('compile_status') and not analysis_result['compile_status'].get('success'):
-                error_message = analysis_result['compile_status'].get('error', '')
-            else:
-                # Nếu có test failures, include a short summary
-                failed_tests = [tr for tr in test_results_for_classification if not tr.get('passed', False)]
-                if failed_tests:
-                    err_summary = []
-                    for t in failed_tests:
-                        err_summary.append(f"Test {t.get('testcase')}: expected='{t.get('expected')}' actual='{t.get('actual')}'")
-                    error_message = '\n'.join(err_summary)
-
-            # Allow client to request a specific AI provider via request payload
-            provider = data.get('ai_provider', 'gemini') if isinstance(data, dict) else 'gemini'
-            detailed = ai_handler.get_detailed_suggestions(code, error_message, '', provider=provider)
-
-            analysis_result['classification'] = classification
-            analysis_result['ai_analysis'] = detailed
-
-            # Persist code submission and AI analysis
-            try:
-                user_id = session.get('user_id') if 'user_id' in session else None
-                submission_id = db.save_submission(
-                    user_id,
-                    None,
-                    code,
-                    compile_status=analysis_result.get('compile_status'),
-                    test_results=analysis_result.get('test_results', []),
-                    run_output=analysis_result.get('run_output', '')
-                )
-
-                sanitized = sanitize_ai_response(detailed) if isinstance(detailed, str) else None
-                db.save_ai_analysis(submission_id, classification, detailed if isinstance(detailed, str) else json.dumps(detailed), sanitized)
-            except Exception:
-                pass
-
-        return jsonify(analysis_result)
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/compile', methods=['POST'])
 def compile_code():
-    """Biên dịch mã C"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         code = data.get('code')
-
         if not code:
             return jsonify({'error': 'Code is required'}), 400
 
         result = analyzer.compile(code)
-        return jsonify(result)
+        testcases = data.get('testcases', [])
+        problem_id = data.get('problem_id')
+        if problem_id and not testcases:
+            problem = db.get_problem_by_id(problem_id)
+            if problem:
+                testcases = db.list_testcases(problem_id)
+                testcases = [{"input": tc.get('input_data', ''), "expected_output": tc.get('expected_output', ''), "name": tc.get('ten_testcase', '')} for tc in testcases]
 
+        if result.get('success') and testcases:
+            evaluation = analyzer.evaluate_testcases(code, testcases)
+            result['passed_count'] = evaluation.get('passed_count', 0)
+            result['total_count'] = evaluation.get('total_count', len(testcases))
+            result['test_results'] = evaluation.get('test_results', [])
+
+        user_id = session.get('user_id')
+        if user_id:
+            try:
+                db.save_submission(
+                    user_id,
+                    problem_id,
+                    code,
+                    compile_status=result,
+                    test_results=result.get('test_results', []),
+                    run_output=result.get('output', '')
+                )
+            except Exception:
+                pass
+
+        return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/run', methods=['POST'])
 def run_code():
-    """Chạy mã C với input"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         code = data.get('code')
         input_data = data.get('input', '')
-
         if not code:
             return jsonify({'error': 'Code is required'}), 400
 
         result = analyzer.run(code, input_data)
-        return jsonify(result)
+        user_id = session.get('user_id')
+        if user_id:
+            try:
+                db.save_submission(
+                    user_id,
+                    data.get('problem_id'),
+                    code,
+                    compile_status=result,
+                    test_results=[],
+                    run_output=result.get('output', '')
+                )
+            except Exception:
+                pass
 
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analyze', methods=['POST'])
+def analyze_code():
+    try:
+        data = request.get_json(silent=True) or {}
+        code = data.get('code')
+        if not code:
+            return jsonify({'error': 'Code is required'}), 400
+
+        problem_id = data.get('problem_id')
+        testcases = data.get('testcases', [])
+        if problem_id and not testcases:
+            problem = db.get_problem_by_id(problem_id)
+            if problem:
+                testcases = db.list_testcases(problem_id)
+                testcases = [{"input": tc.get('input_data', ''), "expected_output": tc.get('expected_output', ''), "name": tc.get('ten_testcase', '')} for tc in testcases]
+
+        analysis_result = analyzer.analyze(code, testcases)
+        static_errors = detect_common_errors(code)
+        if static_errors:
+            analysis_result.setdefault('errors', [])
+            analysis_result['errors'].extend(static_errors)
+            analysis_result['has_errors'] = True
+
+        test_results_for_classification = analysis_result.get('test_results', []) or []
+        submission_id = None
+        user_id = session.get('user_id')
+        if user_id:
+            try:
+                submission_id = db.save_submission(
+                    user_id,
+                    problem_id,
+                    code,
+                    compile_status=analysis_result.get('compile_status'),
+                    test_results=analysis_result.get('test_results', []),
+                    run_output=analysis_result.get('run_output', '')
+                )
+            except Exception:
+                pass
+
+        should_save_ai_analysis = analysis_result.get('has_errors') or any(not tr.get('passed', False) for tr in test_results_for_classification)
+        if should_save_ai_analysis:
+            try:
+                classification = ai_handler.classify_bug_type(code, data.get('requirements', ''), test_results_for_classification)
+            except Exception:
+                classification = {'bug_type_id': 'CF001', 'bug_type_name': 'Unknown', 'confidence': 0}
+
+            error_message = ''
+            if analysis_result.get('compile_status') and not analysis_result['compile_status'].get('success'):
+                error_message = analysis_result['compile_status'].get('error', '')
+            else:
+                failed_tests = [tr for tr in test_results_for_classification if not tr.get('passed', False)]
+                if failed_tests:
+                    error_message = '\n'.join([f"Test {t.get('testcase')}: expected='{t.get('expected')}' actual='{t.get('actual')}'" for t in failed_tests])
+
+            provider = data.get('ai_provider', 'gemini')
+            if not (app.config.get('GEMINI_API_KEY') or app.config.get('OPENROUTER_API_KEY') or app.config.get('GROQ_API_KEY')):
+                detailed = 'AI analysis unavailable: no API key configured'
+            else:
+                try:
+                    detailed = ai_handler.get_detailed_suggestions(code, error_message, '', provider=provider)
+                except Exception:
+                    detailed = 'AI analysis unavailable'
+            if not isinstance(detailed, str) or not detailed.strip():
+                detailed = 'AI analysis unavailable'
+
+            analysis_result['classification'] = classification
+            analysis_result['ai_analysis'] = detailed
+
+        if submission_id and (analysis_result.get('classification') or analysis_result.get('ai_analysis')):
+            try:
+                classification = analysis_result.get('classification') or {'bug_type_id': 'CF001', 'bug_type_name': 'Unknown', 'confidence': 0}
+                detailed = analysis_result.get('ai_analysis') or 'AI analysis unavailable'
+                sanitized = sanitize_ai_response(detailed) if isinstance(detailed, str) else None
+                db.save_ai_analysis(submission_id, classification, detailed if isinstance(detailed, str) else json.dumps(detailed), sanitized)
+            except Exception:
+                pass
+
+        if problem_id:
+            problem = db.get_problem_by_id(problem_id)
+            analysis_result['problem'] = problem
+
+        return jsonify(analysis_result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/suggestions', methods=['POST'])
 def get_suggestions():
-    """Lấy gợi ý từ AI"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         code = data.get('code')
         error_message = data.get('error_message', '')
         output = data.get('output', '')
-
         if not code:
             return jsonify({'error': 'Code is required'}), 400
-
-        provider = data.get('ai_provider', 'gemini') if isinstance(data, dict) else 'gemini'
-        suggestions = ai_handler.get_detailed_suggestions(
-            code, error_message, output, provider=provider
-        )
+        provider = data.get('ai_provider', 'gemini')
+        suggestions = ai_handler.get_detailed_suggestions(code, error_message, output, provider=provider)
         return jsonify({'suggestions': suggestions})
-
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/check-syntax', methods=['POST'])
 def check_syntax():
-    """Kiểm tra cú pháp C cơ bản"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         code = data.get('code')
-
         if not code:
             return jsonify({'error': 'Code is required'}), 400
-
         issues = validate_c_syntax(code)
-        
-        return jsonify({
-            'valid': len(issues) == 0,
-            'issues': issues
-        })
-
+        return jsonify({'valid': len(issues) == 0, 'issues': issues})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/detect-errors', methods=['POST'])
 def detect_errors():
-    """Phát hiện lỗi logic phổ biến"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         code = data.get('code')
-
         if not code:
             return jsonify({'error': 'Code is required'}), 400
-
         errors = detect_common_errors(code)
-        
-        return jsonify({
-            'has_errors': len(errors) > 0,
-            'errors': errors
-        })
-
+        return jsonify({'has_errors': len(errors) > 0, 'errors': errors})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/check-gcc', methods=['GET'])
-def check_gcc():
-    """Kiểm tra GCC có sẵn không"""
-    try:
-        import subprocess
-        result = subprocess.run(['gcc', '--version'], capture_output=True, text=True, timeout=5)
-        
-        if result.returncode == 0:
-            version_line = result.stdout.split('\n')[0]
-            return jsonify({
-                'gcc_available': True,
-                'gcc_version': version_line
-            })
-        else:
-            return jsonify({
-                'gcc_available': False,
-                'gcc_version': 'Not found'
-            })
-    except Exception as e:
-        return jsonify({
-            'gcc_available': False,
-            'gcc_version': f'Error: {str(e)}'
+@app.route('/api/problems', methods=['GET'])
+def list_problems():
+    problems = db.list_problems()
+    return jsonify({'problems': problems})
+
+
+@app.route('/api/problems/<int:problem_id>', methods=['GET'])
+def get_problem(problem_id):
+    problem = db.get_problem_by_id(problem_id)
+    if not problem:
+        return jsonify({'error': 'Problem not found'}), 404
+    testcases = db.list_testcases(problem_id)
+    problem['testcases'] = testcases
+    return jsonify({'problem': problem})
+
+
+@app.route('/api/problems', methods=['POST'])
+def create_problem():
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Vui lòng đăng nhập'}), 401
+    if user.get('vai_tro') not in {'admin', 'giaovien'}:
+        return jsonify({'success': False, 'error': 'Chỉ giáo viên/admin mới được tạo đề bài'}), 403
+
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip()
+    description = (data.get('description') or '').strip()
+    requirements = (data.get('requirements') or '').strip()
+    if not title or not requirements:
+        return jsonify({'success': False, 'error': 'Thiếu tiêu đề hoặc yêu cầu'}), 400
+
+    standard_code = data.get('standard_code', data.get('starter_code', ''))
+    result = db.create_problem(
+        title=title,
+        description=description,
+        requirements=requirements,
+        created_by=user['id'],
+        difficulty=data.get('difficulty', 'medium'),
+        standard_code=standard_code
+    )
+    return jsonify(result)
+
+
+@app.route('/api/problems/<int:problem_id>', methods=['DELETE'])
+def delete_problem(problem_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Vui lòng đăng nhập'}), 401
+
+    problem = db.get_problem_by_id(problem_id)
+    if not problem:
+        return jsonify({'success': False, 'error': 'Không tìm thấy đề bài'}), 404
+
+    if user.get('vai_tro') == 'admin':
+        result = db.delete_problem(problem_id)
+        return jsonify(result)
+
+    if user.get('vai_tro') == 'giaovien' and problem.get('created_by') == user['id']:
+        result = db.delete_problem(problem_id)
+        return jsonify(result)
+
+    return jsonify({'success': False, 'error': 'Bạn chỉ được xóa đề bài do chính mình tạo'}), 403
+
+
+@app.route('/api/problems/<int:problem_id>/testcases', methods=['POST'])
+def add_testcase(problem_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Vui lòng đăng nhập'}), 401
+
+    problem = db.get_problem_by_id(problem_id)
+    if not problem:
+        return jsonify({'success': False, 'error': 'Không tìm thấy đề bài'}), 404
+
+    if user.get('vai_tro') == 'admin':
+        pass
+    elif user.get('vai_tro') == 'giaovien' and problem.get('created_by') == user['id']:
+        pass
+    else:
+        return jsonify({'success': False, 'error': 'Bạn chỉ được thêm testcase cho đề bài do chính mình tạo'}), 403
+
+    data = request.get_json(silent=True) or {}
+    input_data = (data.get('input_data') or '').strip()
+    expected_output = (data.get('expected_output') or '').strip()
+    if not input_data or not expected_output:
+        return jsonify({'success': False, 'error': 'Thiếu input hoặc expected output'}), 400
+
+    testcase_id = db.add_testcase(problem_id, input_data, expected_output, name=data.get('name', ''))
+    return jsonify({'success': True, 'testcase_id': testcase_id})
+
+
+@app.route('/api/problems/<int:problem_id>/testcases', methods=['GET'])
+def list_problem_testcases(problem_id):
+    return jsonify({'testcases': db.list_testcases(problem_id)})
+
+
+@app.route('/api/testcases/<int:testcase_id>', methods=['DELETE'])
+def delete_testcase(testcase_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Vui lòng đăng nhập'}), 401
+
+    testcase = db.get_testcase_by_id(testcase_id)
+    if not testcase:
+        return jsonify({'success': False, 'error': 'Không tìm thấy testcase'}), 404
+
+    problem = db.get_problem_by_id(testcase.get('de_bai_id'))
+    if not problem:
+        return jsonify({'success': False, 'error': 'Không tìm thấy đề bài'}), 404
+
+    if user.get('vai_tro') == 'admin':
+        result = db.delete_testcase(testcase_id)
+        return jsonify(result)
+
+    if user.get('vai_tro') == 'giaovien' and problem.get('created_by') == user['id']:
+        result = db.delete_testcase(testcase_id)
+        return jsonify(result)
+
+    return jsonify({'success': False, 'error': 'Bạn chỉ được xóa testcase của đề bài do chính mình tạo'}), 403
+
+
+@app.route('/api/admin/users', methods=['GET'])
+def admin_list_users():
+    user = get_current_user()
+    if not user or user.get('vai_tro') not in {'admin', 'giaovien'}:
+        return jsonify({'success': False, 'error': 'Chỉ admin hoặc giáo viên mới được xem người dùng'}), 403
+    return jsonify({'users': db.list_users()})
+
+
+@app.route('/api/admin/users/<int:user_id>/role', methods=['POST'])
+def admin_update_role(user_id):
+    user = get_current_user()
+    if not user or user.get('vai_tro') != 'admin':
+        return jsonify({'success': False, 'error': 'Chỉ admin mới được cập nhật vai trò'}), 403
+    data = request.get_json(silent=True) or {}
+    return jsonify(db.update_user_role(user_id, data.get('role', 'hoc_sinh')))
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+def admin_delete_user(user_id):
+    user = get_current_user()
+    if not user or user.get('vai_tro') != 'admin':
+        return jsonify({'success': False, 'error': 'Chỉ admin mới được xóa người dùng'}), 403
+    return jsonify(db.delete_user(user_id))
+
+
+@app.route('/api/submissions/me', methods=['GET'])
+def list_my_submissions():
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Vui lòng đăng nhập'}), 401
+
+    submissions = db.get_submissions_by_user(user['id'])
+    enriched = []
+    for submission in submissions:
+        problem = None
+        problem_id = submission.get('de_bai_id')
+        if problem_id:
+            problem = db.get_problem_by_id(problem_id)
+        test_results = json.loads(submission['test_results']) if submission.get('test_results') else []
+        passed_count = sum(1 for tr in test_results if tr.get('passed')) if test_results else 0
+        total_count = len(test_results)
+        enriched.append({
+            'id': submission.get('id'),
+            'created_at': submission.get('created_at'),
+            'problem_id': problem_id,
+            'problem_title': problem.get('tieu_de') if problem else None,
+            'code': submission.get('ma_nguon') or '',
+            'compile_status': json.loads(submission['compile_status']) if submission.get('compile_status') else None,
+            'test_results': test_results,
+            'passed_count': passed_count,
+            'total_count': total_count,
+            'run_output': submission.get('run_output') or ''
         })
 
+    return jsonify({'success': True, 'submissions': enriched})
 
-@app.route('/api/check-api', methods=['GET'])
-def check_api():
-    """Kiểm tra Gemini API có sẵn không"""
-    try:
-        api_key = app.config.get('GEMINI_API_KEY', '')
-        
-        if not api_key or api_key.strip() == '':
-            return jsonify({
-                'api_available': False,
-                'api_message': 'API key not configured'
-            })
-        
-        # Kiểm tra nếu AI handler đã khởi tạo
-        if hasattr(app, 'ai_handler') and app.ai_handler:
-            return jsonify({
-                'api_available': True,
-                'api_message': 'Gemini API configured'
-            })
-        else:
-            return jsonify({
-                'api_available': False,
-                'api_message': 'AI handler not initialized'
-            })
-    except Exception as e:
-        return jsonify({
-            'api_available': False,
-            'api_message': f'Error: {str(e)}'
+
+@app.route('/api/admin/users/<int:user_id>/submissions', methods=['GET'])
+def admin_list_user_submissions(user_id):
+    user = get_current_user()
+    if not user or user.get('vai_tro') not in {'admin', 'giaovien'}:
+        return jsonify({'success': False, 'error': 'Chỉ admin hoặc giáo viên mới được xem bài làm học sinh'}), 403
+
+    target_user = db.get_user_by_id(user_id)
+    if not target_user:
+        return jsonify({'success': False, 'error': 'Không tìm thấy người dùng'}), 404
+    if target_user.get('vai_tro') != 'hoc_sinh' and user.get('vai_tro') != 'admin':
+        return jsonify({'success': False, 'error': 'Giáo viên chỉ có thể xem bài làm của học sinh'}), 403
+
+    submissions = db.get_submissions_by_user(user_id)
+    enriched = []
+    for submission in submissions:
+        problem = None
+        problem_id = submission.get('de_bai_id')
+        if problem_id:
+            problem = db.get_problem_by_id(problem_id)
+        test_results = json.loads(submission['test_results']) if submission.get('test_results') else []
+        passed_count = sum(1 for tr in test_results if tr.get('passed')) if test_results else 0
+        total_count = len(test_results)
+        enriched.append({
+            'id': submission.get('id'),
+            'created_at': submission.get('created_at'),
+            'problem_id': problem_id,
+            'problem_title': problem.get('tieu_de') if problem else None,
+            'problem_description': problem.get('mo_ta') if problem else None,
+            'problem_requirements': problem.get('yeu_cau') if problem else None,
+            'code': submission.get('ma_nguon') or '',
+            'compile_status': json.loads(submission['compile_status']) if submission.get('compile_status') else None,
+            'test_results': test_results,
+            'passed_count': passed_count,
+            'total_count': total_count,
+            'run_output': submission.get('run_output') or ''
         })
 
+    return jsonify({'success': True, 'submissions': enriched})
 
-# ============ AUTHENTICATION ENDPOINTS ============
+
+@app.route('/api/admin/users/<int:user_id>/teacher-info', methods=['GET'])
+def admin_list_teacher_info(user_id):
+    user = get_current_user()
+    if not user or user.get('vai_tro') != 'admin':
+        return jsonify({'success': False, 'error': 'Chỉ admin mới được xem thông tin giáo viên'}), 403
+
+    problems = db.list_problems_by_creator(user_id)
+    enriched_problems = []
+    for problem in problems:
+        testcases = db.list_testcases(problem['id'])
+        enriched_problems.append({
+            'id': problem['id'],
+            'title': problem.get('tieu_de'),
+            'description': problem.get('mo_ta'),
+            'requirements': problem.get('yeu_cau'),
+            'difficulty': problem.get('do_kho'),
+            'testcases': [{
+                'id': tc.get('id'),
+                'name': tc.get('ten_testcase'),
+                'input': tc.get('input_data'),
+                'expected_output': tc.get('expected_output')
+            } for tc in testcases]
+        })
+
+    return jsonify({'success': True, 'problems': enriched_problems})
+
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
-    """Đăng ký user mới"""
-    try:
-        data = request.get_json()
-        username = data.get('username', '').strip()
-        email = data.get('email', '').strip()
-        password = data.get('password', '').strip()
-        password_confirm = data.get('password_confirm', '').strip()
-        
-        # Validate input
-        if not username or not email or not password:
-            return jsonify({'success': False, 'error': 'Vui lòng nhập đầy đủ thông tin'}), 400
-        
-        if len(username) < 3:
-            return jsonify({'success': False, 'error': 'Username phải từ 3 ký tự trở lên'}), 400
-        
-        if len(password) < 6:
-            return jsonify({'success': False, 'error': 'Password phải từ 6 ký tự trở lên'}), 400
-        
-        if password != password_confirm:
-            return jsonify({'success': False, 'error': 'Password không khớp'}), 400
-        
-        # Validate email format
-        if '@' not in email or '.' not in email:
-            return jsonify({'success': False, 'error': 'Email không hợp lệ'}), 400
-        
-        # Optional full name
-        full_name = data.get('full_name', '').strip()
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    email = (data.get('email') or '').strip()
+    password = (data.get('password') or '').strip()
+    password_confirm = (data.get('password_confirm') or '').strip()
+    full_name = (data.get('full_name') or '').strip()
+    role = (data.get('role') or 'hoc_sinh').strip().lower()
+    if role not in {'hoc_sinh', 'giaovien'}:
+        role = 'hoc_sinh'
 
-        # Register user
-        result = db.register_user(username, email, password, full_name=full_name)
-        
-        if result['success']:
-            return jsonify(result), 201
-        else:
-            return jsonify(result), 400
-            
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    if not username or not email or not password:
+        return jsonify({'success': False, 'error': 'Vui lòng nhập đầy đủ thông tin'}), 400
+    if len(username) < 3:
+        return jsonify({'success': False, 'error': 'Tên đăng nhập phải từ 3 ký tự trở lên'}), 400
+    if len(password) < 6:
+        return jsonify({'success': False, 'error': 'Mật khẩu phải từ 6 ký tự trở lên'}), 400
+    if password != password_confirm:
+        return jsonify({'success': False, 'error': 'Mật khẩu không khớp'}), 400
+    if '@' not in email or '.' not in email:
+        return jsonify({'success': False, 'error': 'Email không hợp lệ'}), 400
+
+    result = db.register_user(username, email, password, full_name=full_name, role=role)
+    return jsonify(result), 201 if result.get('success') else 400
 
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    """Đăng nhập user"""
-    try:
-        data = request.get_json()
-        username = data.get('username', '').strip()
-        password = data.get('password', '').strip()
-        
-        if not username or not password:
-            return jsonify({'success': False, 'error': 'Vui lòng nhập username và password'}), 400
-        
-        # Verify password
-        result = db.verify_password(username, password)
-        
-        if result['success']:
-            # Save user_id in session
-            session.permanent = True
-            session['user_id'] = result['user_id']
-            session['username'] = result['username']
-            return jsonify({'success': True, 'username': result['username'], 'user_id': result['user_id']}), 200
-        else:
-            return jsonify(result), 401
-            
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    password = (data.get('password') or '').strip()
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Vui lòng nhập username và password'}), 400
+
+    result = db.verify_password(username, password)
+    if result['success']:
+        session.permanent = True
+        session['user_id'] = result['user_id']
+        session['username'] = result['username']
+        session['role'] = result.get('role', 'hoc_sinh')
+        return jsonify({'success': True, 'username': result['username'], 'user_id': result['user_id'], 'role': result.get('role', 'hoc_sinh')})
+    return jsonify(result), 401
 
 
 @app.route('/api/auth/google-login', methods=['POST'])
 def google_login():
-    """Đăng nhập bằng Google OAuth - Tự động tạo user nếu chưa tồn tại"""
-    try:
-        data = request.get_json()
-        email = data.get('email', '').strip()
-        full_name = data.get('full_name', '')
-        
-        if not email:
-            return jsonify({'success': False, 'error': 'Email không hợp lệ'}), 400
-        
-        # Tìm hoặc tạo user từ Google
-        result = db.get_or_create_google_user(email, full_name)
-        
-        if result['success']:
-            # Save user_id in session
-            session.permanent = True
-            session['user_id'] = result['user_id']
-            session['username'] = result['username']
-            return jsonify({
-                'success': True, 
-                'username': result['username'], 
-                'user_id': result['user_id'],
-                'is_new': result.get('is_new', False)
-            }), 200
-        else:
-            return jsonify(result), 400
-            
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip()
+    full_name = data.get('full_name', '')
+    if not email:
+        return jsonify({'success': False, 'error': 'Email không hợp lệ'}), 400
+
+    result = db.get_or_create_google_user(email, full_name)
+    if result['success']:
+        session.permanent = True
+        session['user_id'] = result['user_id']
+        session['username'] = result['username']
+        session['role'] = result.get('role', 'hoc_sinh')
+        return jsonify({'success': True, 'username': result['username'], 'user_id': result['user_id'], 'role': result.get('role', 'hoc_sinh'), 'is_new': result.get('is_new', False)})
+    return jsonify(result), 400
 
 
 @app.route('/api/auth/profile', methods=['GET'])
 def get_profile():
-    """Lấy thông tin profile của user đang đăng nhập"""
-    try:
-        from flask import session
-        user_id = session.get('user_id')
-        
-        if not user_id:
-            return jsonify({'success': False, 'error': 'Chưa đăng nhập'}), 401
-        
-        user = db.get_user_by_id(user_id)
-        
-        if user:
-            return jsonify({'success': True, 'user': user}), 200
-        else:
-            return jsonify({'success': False, 'error': 'User không tồn tại'}), 404
-            
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Chưa đăng nhập'}), 401
+    return jsonify({'success': True, 'user': user})
 
 
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
-    """Đăng xuất user"""
-    try:
-        session.clear()
-        return jsonify({'success': True, 'message': 'Logged out successfully'}), 200
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    session.clear()
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
 
 
 @app.route('/api/auth/check', methods=['GET'])
 def check_auth():
-    """Kiểm tra trạng thái đăng nhập"""
-    try:
-        from flask import session
-        user_id = session.get('user_id')
-        username = session.get('username')
-        
-        if user_id:
-            return jsonify({'authenticated': True, 'user_id': user_id, 'username': username}), 200
-        else:
-            return jsonify({'authenticated': False}), 200
-            
-    except Exception as e:
-        return jsonify({'authenticated': False, 'error': str(e)}), 500
+    user = get_current_user()
+    if user:
+        return jsonify({'authenticated': True, 'user_id': user['id'], 'username': user.get('ten_dang_nhap') or user.get('username'), 'role': user.get('vai_tro') or user.get('role')})
+    return jsonify({'authenticated': False})
 
 
-# Serve frontend static files in development so frontend and backend share origin.
-# This route is registered after all API routes to avoid catching `/api/*` requests.
+def get_frontend_dir():
+    base_dir = os.path.dirname(__file__)
+    candidates = [
+        os.path.abspath(os.path.join(base_dir, '..', 'frontend')),
+        os.path.abspath(os.path.join(base_dir, 'frontend')),
+    ]
+    for candidate in candidates:
+        if os.path.isdir(candidate):
+            return candidate
+    return os.path.abspath(os.path.join(base_dir, 'frontend'))
+
+
 @app.route('/')
 def serve_root():
-    # Serve the main analysis page directly.
-    base_dir = os.path.dirname(__file__)
-    frontend_dir = os.path.abspath(os.path.join(base_dir, 'frontend'))
-    if not os.path.isdir(frontend_dir):
-        frontend_dir = os.path.abspath(os.path.join(base_dir, '..', 'frontend'))
+    return send_from_directory(get_frontend_dir(), 'index.html')
 
-    print(f"[serve_root] serving index.html from {frontend_dir}")
-    print(f"[url_map] {app.url_map}")
-    return send_from_directory(frontend_dir, 'index.html')
+
+@app.route('/auth')
+@app.route('/login')
+@app.route('/register')
+def serve_auth_page():
+    return send_from_directory(get_frontend_dir(), 'auth.html')
 
 
 @app.route('/<path:path>')
 def serve_frontend(path):
-    # Prevent this catch-all from intercepting API routes
     if path.startswith('api/'):
         return jsonify({'error': 'Not Found'}), 404
+    return send_from_directory(get_frontend_dir(), path)
 
-    base_dir = os.path.dirname(__file__)
-    frontend_dir = os.path.abspath(os.path.join(base_dir, 'frontend'))
-    if not os.path.isdir(frontend_dir):
-        frontend_dir = os.path.abspath(os.path.join(base_dir, '..', 'frontend'))
 
-    target_path = os.path.join(frontend_dir, path)
-    print(f"[serve_frontend] request for '{path}' -> {target_path} exists={os.path.exists(target_path)}")
-    return send_from_directory(frontend_dir, path)
+def get_current_user():
+    user_id = session.get('user_id')
+    if not user_id:
+        return None
+    user = db.get_user_by_id(user_id)
+    if user:
+        session['role'] = user.get('vai_tro') or user.get('role') or session.get('role', 'hoc_sinh')
+    return user
 
 
 if __name__ == '__main__':
-    # Configure session
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
     app.config['SESSION_COOKIE_HTTPONLY'] = True
-
-    # For local development we want authentication cookies to be sent with
-    # cross-origin XHR/fetch requests from the frontend served on port 8000.
-    # Set SameSite=None to allow cross-site cookies for credentialed requests.
-    # NOTE: In production you should use Secure cookies and restrict origins.
     if app.config.get('DEBUG', True):
-        # Serve frontend from the same origin in development; Lax is sufficient
-        # and avoids modern browsers rejecting cookies with SameSite=None when
-        # not using Secure/HTTPS.
         app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
         app.config['SESSION_COOKIE_SECURE'] = False
     else:
         app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
         app.config['SESSION_COOKIE_SECURE'] = True
-    
-    print(f"Starting Flask app in {app.config.get('ENV')} mode...")
-    # Run on port 5000 to avoid conflicts with other services (e.g. nginx/docker on 8000)
-    # Bind to 0.0.0.0 so the container's port mapping is reachable from the host.
     app.run(debug=app.config.get('DEBUG', True), host='0.0.0.0', port=5000)

@@ -105,6 +105,62 @@ class CodeAnalyzer:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
+    def evaluate_testcases(self, code, testcases=None):
+        """Biên dịch và chạy chương trình trên từng testcase, trả về số testcase đạt."""
+        compile_result = self.compile(code)
+        if not compile_result['success']:
+            return {
+                'success': False,
+                'passed_count': 0,
+                'total_count': len(testcases or []),
+                'test_results': [],
+                'error': compile_result.get('error', 'Compilation failed'),
+                'compile_output': compile_result.get('output', '')
+            }
+
+        executable = compile_result['executable']
+        test_results = []
+        passed_count = 0
+        for i, testcase in enumerate(testcases or []):
+            test_input = testcase.get('input', '')
+            expected_output = testcase.get('expected_output', '')
+            try:
+                result = subprocess.run(
+                    [executable],
+                    input=test_input,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    encoding='utf-8'
+                )
+                actual_output = result.stdout.strip()
+                expected = expected_output.strip()
+                passed = result.returncode == 0 and actual_output == expected
+                if passed:
+                    passed_count += 1
+                test_results.append({
+                    'testcase': i + 1,
+                    'passed': passed,
+                    'input': test_input,
+                    'expected': expected_output,
+                    'actual': result.stdout
+                })
+            except subprocess.TimeoutExpired:
+                test_results.append({
+                    'testcase': i + 1,
+                    'passed': False,
+                    'input': test_input,
+                    'expected': expected_output,
+                    'actual': 'Program timeout'
+                })
+
+        return {
+            'success': True,
+            'passed_count': passed_count,
+            'total_count': len(testcases or []),
+            'test_results': test_results
+        }
+
     def analyze(self, code, testcases=None):
         """
         Phân tích toàn diện mã C

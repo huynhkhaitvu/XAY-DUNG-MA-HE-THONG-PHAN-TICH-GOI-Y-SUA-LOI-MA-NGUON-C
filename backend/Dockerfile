@@ -27,6 +27,7 @@ VOLUME ["/app/data"]
 
 ENV FLASK_ENV=production
 ENV FLASK_RUN_HOST=0.0.0.0
+ENV PYTHONPATH=/app
 
 EXPOSE 5000
 

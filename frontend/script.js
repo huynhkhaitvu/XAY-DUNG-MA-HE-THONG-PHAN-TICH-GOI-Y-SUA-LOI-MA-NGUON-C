@@ -1,391 +1,882 @@
-// API Configuration: use relative path so requests are same-origin
 const API_BASE_URL = '/api';
+let currentProblem = null;
+let currentUser = null;
+let availableProblems = [];
 
-// Initialize
-document.addEventListener('DOMContentLoaded', function() {
-    checkUserAuthAndRedirect();
+window.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
-    renderTestCases();
-    checkBackendConnection();
-    checkUserAuth();
-    setupLogout();
+    checkAuthAndLoad();
 });
 
-// Check backend connection
-async function checkBackendConnection() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/health`);
-        if (response.ok) {
-            console.log('✅ Backend connected');
-        }
-    } catch (error) {
-        console.warn('⚠️ Backend not available yet. Start backend with: python app.py');
-    }
-}
-
-// Event Listeners
 function initializeEventListeners() {
-    document.getElementById('compileBtn').addEventListener('click', handleCompile);
-    document.getElementById('analyzeBtn').addEventListener('click', handleAnalyze);
-    document.getElementById('clearBtn').addEventListener('click', handleClear);
-    document.getElementById('addTestCaseBtn').addEventListener('click', handleAddTestCase);
-    // File open button handlers
-    const openBtn = document.getElementById('openFileBtn');
+    const compileBtn = document.getElementById('compileBtn');
+    if (compileBtn) compileBtn.addEventListener('click', handleCompile);
+
+    const runBtn = document.getElementById('runBtn');
+    if (runBtn) runBtn.addEventListener('click', handleRun);
+
+    const openFileBtn = document.getElementById('openFileBtn');
     const fileInput = document.getElementById('fileInput');
-    if (openBtn && fileInput) {
-        openBtn.addEventListener('click', () => fileInput.click());
+    if (openFileBtn && fileInput) {
+        openFileBtn.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', handleFileSelect);
     }
-}
 
-// Handle file selection: read first file and put into editor
-function handleFileSelect(event) {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-    const file = files[0];
-    const maxSize = 1024 * 1024; // 1MB limit
-    const fileNameDisplay = document.getElementById('fileNameDisplay');
-
-    if (file.size > maxSize) {
-        showError('File quá lớn (tối đa 1MB)');
-        event.target.value = '';
-        return;
+    const problemSelect = document.getElementById('problemSelect');
+    if (problemSelect) {
+        problemSelect.addEventListener('change', (e) => loadProblemDetails(e.target.value));
     }
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const text = e.target.result;
-        document.getElementById('codeEditor').value = text;
-        if (fileNameDisplay) fileNameDisplay.textContent = file.name;
-        showSuccess('Đã tải file vào trình soạn thảo');
-    };
-    reader.onerror = function() {
-        showError('Không thể đọc file');
-    };
-    reader.readAsText(file);
-}
+    const createProblemBtn = document.getElementById('createProblemBtn');
+    if (createProblemBtn) {
+        createProblemBtn.addEventListener('click', handleCreateProblem);
+    }
 
-// Get code
-function getCode() {
-    return document.getElementById('codeEditor').value;
-}
+    const openTeacherFormBtn = document.getElementById('openTeacherFormBtn');
+    const teacherManagementContent = document.getElementById('teacherManagementContent');
+    if (openTeacherFormBtn && teacherManagementContent) {
+        openTeacherFormBtn.addEventListener('click', () => {
+            const shouldShow = teacherManagementContent.style.display === 'none' || teacherManagementContent.style.display === '';
+            teacherManagementContent.style.display = shouldShow ? 'block' : 'none';
+            if (shouldShow) {
+                resetProblemForm();
+            }
+        });
+    }
 
-// Get test cases
-function getTestCases() {
-    const testCases = [];
-    const testElements = document.querySelectorAll('.test-case');
-    testElements.forEach(el => {
-        const input = el.querySelector('.test-input').value;
-        const output = el.querySelector('.test-output').value;
-        if (input || output) {
-            testCases.push({
-                input: input,
-                expected_output: output
+    const deleteProblemBtn = document.getElementById('deleteProblemBtn');
+    if (deleteProblemBtn) {
+        deleteProblemBtn.addEventListener('click', handleDeleteProblem);
+    }
+
+    const addTestcaseBtn = document.getElementById('addTestcaseBtn');
+    if (addTestcaseBtn) {
+        addTestcaseBtn.addEventListener('click', handleAddTestcase);
+    }
+
+    const submitTestcaseBtn = document.getElementById('submitTestcaseBtn');
+    if (submitTestcaseBtn) {
+        submitTestcaseBtn.addEventListener('click', handleAddTestcase);
+    }
+
+    const helpBtn = document.getElementById('helpBtn');
+    if (helpBtn) {
+        helpBtn.addEventListener('click', handleHelp);
+    }
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+
+    document.querySelectorAll('.management-menu .menu-item, .management-menu .menu-submenu a').forEach((item) => {
+        item.addEventListener('click', (event) => {
+            event.preventDefault();
+            document.querySelectorAll('.management-menu .menu-item, .management-menu .menu-submenu a').forEach((link) => {
+                link.classList.remove('active');
             });
-        }
+            item.classList.add('active');
+
+            const content = document.querySelector('.management-content');
+            if (!content) return;
+            const problemSelectBlock = document.getElementById('problemSelect')?.closest('.mb-3');
+            const problemInfoBlock = document.querySelector('.management-content > .border.rounded');
+            const testcaseBlock = document.querySelector('.management-content > .mt-3');
+            const createBlock = document.getElementById('teacherManagementContent');
+            const createButton = document.getElementById('openTeacherFormBtn');
+            const problemListSection = document.getElementById('teacherProblemListSection');
+
+            const text = item.textContent.trim();
+            if (text.includes('Danh sách đề')) {
+                if (problemSelectBlock) problemSelectBlock.style.display = 'block';
+                if (problemInfoBlock) problemInfoBlock.style.display = 'block';
+                if (testcaseBlock) testcaseBlock.style.display = 'block';
+                if (createBlock) createBlock.style.display = 'none';
+                if (createButton) createButton.style.display = 'none';
+                if (problemListSection) problemListSection.style.display = 'block';
+            } else if (text.includes('Tạo đề')) {
+                if (problemSelectBlock) problemSelectBlock.style.display = 'none';
+                if (problemInfoBlock) problemInfoBlock.style.display = 'block';
+                if (testcaseBlock) testcaseBlock.style.display = 'none';
+                if (createBlock) createBlock.style.display = 'block';
+                if (createButton) createButton.style.display = 'none';
+                if (problemListSection) problemListSection.style.display = 'none';
+                resetProblemForm();
+            } else {
+                if (problemSelectBlock) problemSelectBlock.style.display = 'block';
+                if (problemInfoBlock) problemInfoBlock.style.display = 'block';
+                if (testcaseBlock) testcaseBlock.style.display = 'block';
+                if (createBlock) createBlock.style.display = 'none';
+                if (createButton) createButton.style.display = 'none';
+                if (problemListSection) problemListSection.style.display = 'block';
+            }
+        });
     });
-    return testCases;
 }
 
-// Handle Compile
+async function checkAuthAndLoad() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/check`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.authenticated) {
+            window.location.href = 'auth.html';
+            return;
+        }
+        currentUser = data;
+        const userDisplay = document.getElementById('userDisplay');
+        const usernameDisplay = document.getElementById('usernameDisplay');
+        const roleDisplay = document.getElementById('roleDisplay');
+        const loginLink = document.getElementById('loginLink');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const teacherPanel = document.getElementById('teacherPanel');
+        const adminPanel = document.getElementById('adminPanel');
+        const heroCard = document.getElementById('heroCard');
+        const studentProblemSection = document.getElementById('studentProblemSection');
+        const testcaseSection = document.getElementById('studentTestcaseSection');
+        const workspaceActions = document.getElementById('workspaceActions');
+        const openFileBtn = document.getElementById('openFileBtn');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const workspaceSection = document.getElementById('workspaceSection');
+        const codeEditor = document.getElementById('codeEditor');
+        const workspaceTitle = document.getElementById('workspaceTitle');
+        const addTestcaseBtn = document.getElementById('addTestcaseBtn');
+        const deleteProblemBtn = document.getElementById('deleteProblemBtn');
+        const role = String(data.role || '').toLowerCase();
+        const isTeacherOrAdmin = ['admin', 'giaovien'].includes(role);
+        const isStudent = role === 'hoc_sinh';
+        if (userDisplay) userDisplay.style.display = 'inline-block';
+        if (usernameDisplay) usernameDisplay.textContent = data.username || 'user';
+        if (roleDisplay) roleDisplay.textContent = roleLabel(data.role || 'hoc_sinh');
+        if (loginLink) loginLink.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'inline-block';
+        if (teacherPanel) teacherPanel.style.display = isTeacherOrAdmin ? 'block' : 'none';
+        if (adminPanel) adminPanel.style.display = role === 'admin' ? 'block' : 'none';
+        if (heroCard) heroCard.style.display = isStudent ? 'block' : 'none';
+        if (studentProblemSection) studentProblemSection.style.display = isStudent ? 'block' : 'none';
+        if (testcaseSection) testcaseSection.style.display = isTeacherOrAdmin ? 'block' : 'none';
+        if (workspaceActions) workspaceActions.style.display = isTeacherOrAdmin ? 'none' : 'flex';
+        if (openFileBtn) openFileBtn.style.display = isTeacherOrAdmin ? 'none' : 'inline-block';
+        if (fileNameDisplay) fileNameDisplay.style.display = isTeacherOrAdmin ? 'none' : 'inline';
+        const compileBtn = document.getElementById('compileBtn');
+        const runBtn = document.getElementById('runBtn');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        if (compileBtn) compileBtn.style.display = isTeacherOrAdmin ? 'none' : 'inline-block';
+        if (runBtn) runBtn.style.display = isTeacherOrAdmin ? 'none' : 'inline-block';
+        if (analyzeBtn) analyzeBtn.style.display = isTeacherOrAdmin ? 'none' : 'inline-block';
+        if (clearBtn) clearBtn.style.display = isTeacherOrAdmin ? 'none' : 'inline-block';
+        if (codeEditor) {
+            codeEditor.readOnly = isTeacherOrAdmin;
+            codeEditor.style.backgroundColor = isTeacherOrAdmin ? '#f8f9fa' : '#fff';
+        }
+        if (workspaceTitle) workspaceTitle.textContent = isTeacherOrAdmin ? '✅ Code chuẩn' : '📝 Mã C';
+        if (workspaceSection) workspaceSection.style.display = isTeacherOrAdmin ? 'none' : 'block';
+        if (addTestcaseBtn) addTestcaseBtn.style.display = isTeacherOrAdmin ? 'inline-block' : 'none';
+        if (deleteProblemBtn) deleteProblemBtn.style.display = role === 'admin' ? 'block' : 'none';
+        if (isStudent && testcaseSection) {
+            testcaseSection.style.display = 'none';
+        }
+        await loadProblems();
+        await loadStudentSubmissionHistory();
+        if (role === 'admin') {
+            await loadAdminUsers();
+        } else if (isTeacherOrAdmin) {
+            await loadTeacherStudents();
+        }
+    } catch (error) {
+        showResult('Không thể xác thực người dùng: ' + error.message, 'error');
+    }
+}
+
+async function loadProblems() {
+    const response = await fetch(`${API_BASE_URL}/problems`);
+    const data = await response.json();
+    const select = document.getElementById('problemSelect');
+    const problemDetails = document.getElementById('problemDetails');
+    const teacherProblemList = document.getElementById('teacherProblemList');
+    if (!select) return;
+    select.innerHTML = '';
+    availableProblems = data.problems || [];
+    if (!availableProblems.length) {
+        select.innerHTML = '<option value="">Chưa có đề bài</option>';
+        if (problemDetails) {
+            problemDetails.innerHTML = '<div class="empty">Chưa có đề bài nào trong hệ thống. Giáo viên hoặc admin có thể tạo mới.</div>';
+        }
+        if (teacherProblemList) {
+            teacherProblemList.innerHTML = '<div class="empty">Chưa có đề bài nào.</div>';
+        }
+        showResult('Chưa có đề bài trong hệ thống. Giáo viên/admin có thể tạo mới.', 'info');
+        return;
+    }
+    availableProblems.forEach(problem => {
+        const option = document.createElement('option');
+        option.value = problem.id;
+        option.textContent = problem.tieu_de;
+        select.appendChild(option);
+    });
+    const selectedId = select.value || availableProblems[0].id;
+    select.value = selectedId;
+    renderTeacherProblemList(availableProblems, selectedId);
+    await loadProblemDetails(selectedId);
+}
+
+function renderTeacherProblemList(problems, selectedId = null) {
+    const container = document.getElementById('teacherProblemList');
+    if (!container) return;
+    if (!problems || !problems.length) {
+        container.innerHTML = '<div class="empty">Chưa có đề bài nào.</div>';
+        return;
+    }
+    const difficultyMap = { easy: 'Dễ', medium: 'Trung bình', hard: 'Khó' };
+    container.innerHTML = problems.map((problem) => {
+        const isActive = String(problem.id) === String(selectedId);
+        const difficultyLabel = difficultyMap[problem.do_kho] || 'Trung bình';
+        return `
+            <div class="problem-list-item ${isActive ? 'active' : ''}" onclick="loadProblemDetails(${problem.id})">
+                <div class="problem-list-title">${escapeHtml(problem.tieu_de || 'Đề chưa có tên')}</div>
+                <div class="problem-list-meta">Độ khó: ${escapeHtml(difficultyLabel)} • Testcase: ${problem.testcases ? problem.testcases.length : 0}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadProblemDetails(problemId) {
+    const response = await fetch(`${API_BASE_URL}/problems/${problemId}`);
+    const data = await response.json();
+    currentProblem = data.problem;
+    renderTeacherProblemList(availableProblems, problemId);
+    const problemDetails = document.getElementById('problemDetails');
+    if (!problemDetails) return;
+    if (!currentProblem) {
+        problemDetails.innerHTML = '<div class="empty">Vui lòng chọn một đề bài để xem chi tiết.</div>';
+        return;
+    }
+    const difficultyMap = { easy: 'Dễ', medium: 'Trung bình', hard: 'Khó' };
+    const difficultyLabel = difficultyMap[currentProblem.do_kho] || 'Trung bình';
+    const testcaseCount = currentProblem.testcases ? currentProblem.testcases.length : 0;
+    problemDetails.innerHTML = `
+        <div class="problem-meta-grid">
+            <div class="problem-meta-box">
+                <span class="problem-meta-label">Độ khó</span>
+                <div><span class="problem-pill">${escapeHtml(difficultyLabel)}</span></div>
+            </div>
+            <div class="problem-meta-box">
+                <span class="problem-meta-label">Testcase</span>
+                <div class="fw-semibold">${testcaseCount} mẫu</div>
+            </div>
+            <div class="problem-meta-box">
+                <span class="problem-meta-label">Tiêu đề</span>
+                <div class="fw-semibold">${escapeHtml(currentProblem.tieu_de || '')}</div>
+            </div>
+        </div>
+        <div class="problem-meta-box">
+            <span class="problem-meta-label">Mô tả</span>
+            <p>${escapeHtml(currentProblem.mo_ta || 'Chưa có mô tả cho đề bài này.')}</p>
+        </div>
+        <div class="problem-meta-box">
+            <span class="problem-meta-label">Yêu cầu</span>
+            <p>${escapeHtml(currentProblem.yeu_cau || 'Chưa có yêu cầu chi tiết.')}</p>
+        </div>
+    `;
+
+    const titleInput = document.getElementById('problemTitle');
+    const descriptionInput = document.getElementById('problemDescription');
+    const requirementsInput = document.getElementById('problemRequirements');
+    const standardCodeInput = document.getElementById('problemStandardCode');
+    const difficultySelect = document.getElementById('problemDifficulty');
+    if (titleInput) titleInput.value = currentProblem.tieu_de || '';
+    if (descriptionInput) descriptionInput.value = currentProblem.mo_ta || '';
+    if (requirementsInput) requirementsInput.value = currentProblem.yeu_cau || '';
+    if (standardCodeInput) standardCodeInput.value = currentProblem.ma_chuan || '';
+    if (difficultySelect) difficultySelect.value = currentProblem.do_kho || 'medium';
+
+    renderTestcases(currentProblem.testcases || []);
+    const editor = document.getElementById('codeEditor');
+    if (editor) {
+        const isTeacherOrAdmin = ['admin', 'giaovien'].includes(currentUser?.role);
+        if (isTeacherOrAdmin) {
+            editor.value = currentProblem.ma_chuan || currentProblem.ma_khoi_dong || '';
+        } else if (!editor.value.trim()) {
+            editor.value = '';
+        }
+    }
+}
+
+function resetProblemForm() {
+    currentProblem = null;
+    const titleInput = document.getElementById('problemTitle');
+    const descriptionInput = document.getElementById('problemDescription');
+    const requirementsInput = document.getElementById('problemRequirements');
+    const standardCodeInput = document.getElementById('problemStandardCode');
+    const difficultySelect = document.getElementById('problemDifficulty');
+    const problemSelect = document.getElementById('problemSelect');
+    if (titleInput) titleInput.value = '';
+    if (descriptionInput) descriptionInput.value = '';
+    if (requirementsInput) requirementsInput.value = '';
+    if (standardCodeInput) standardCodeInput.value = '';
+    if (difficultySelect) difficultySelect.value = 'medium';
+    if (problemSelect) problemSelect.value = '';
+    renderTestcases([]);
+}
+
+async function loadStudentSubmissionHistory() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/submissions/me`, { credentials: 'include' });
+        const data = await response.json();
+        const list = document.getElementById('studentHistoryList');
+        const count = document.getElementById('studentHistoryCount');
+        if (!list) return;
+        if (!data.success || !data.submissions || !data.submissions.length) {
+            list.innerHTML = '<div class="empty">Bạn chưa có lần làm bài nào.</div>';
+            if (count) count.textContent = '0';
+            return;
+        }
+        if (count) count.textContent = String(data.submissions.length);
+        list.innerHTML = data.submissions.slice(0, 6).map((item) => {
+            const createdAt = item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : 'Không rõ thời gian';
+            const problemTitle = item.problem_title || 'Đề chưa xác định';
+            const passedCount = Number(item.passed_count ?? (Array.isArray(item.test_results) ? item.test_results.filter((t) => t.passed).length : 0));
+            const totalCount = Number(item.total_count ?? (Array.isArray(item.test_results) ? item.test_results.length : 0));
+            const statusText = item.compile_status && item.compile_status.success === false ? 'Lỗi' : (totalCount ? `Đã vượt ${passedCount}/${totalCount} testcase` : 'Đã chạy');
+            return `
+                <div class="student-history-item">
+                    <div class="history-title">${escapeHtml(problemTitle)}</div>
+                    <div class="history-meta">${escapeHtml(statusText)} • ${escapeHtml(createdAt)}</div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Load submission history error:', error);
+    }
+}
+
+function renderTestcases(testcases) {
+    const container = document.getElementById('testCasesContainer');
+    if (!container) return;
+    if (!testcases.length) {
+        container.innerHTML = '<div class="empty">Chưa có testcase nào.</div>';
+        return;
+    }
+    container.innerHTML = testcases.map((tc, index) => `
+        <div class="testcase-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <strong>Testcase ${index + 1}: ${escapeHtml(tc.ten_testcase || '')}</strong>
+                <button class="btn btn-outline-danger btn-sm" type="button" onclick="deleteTestcase(${tc.id})">Xóa</button>
+            </div>
+            <p><strong>Input:</strong><br>${escapeHtml(tc.input_data || '')}</p>
+            <p><strong>Expected:</strong><br>${escapeHtml(tc.expected_output || '')}</p>
+        </div>
+    `).join('');
+}
+
+function getCode() {
+    const editor = document.getElementById('codeEditor');
+    return editor ? editor.value : '';
+}
+
+function getActiveTestcases() {
+    if (currentProblem && currentProblem.testcases) {
+        return currentProblem.testcases.map(tc => ({
+            input: tc.input_data || '',
+            expected_output: tc.expected_output || ''
+        }));
+    }
+    return [];
+}
+
 async function handleCompile() {
     const code = getCode();
     if (!code.trim()) {
-        showError('Vui lòng nhập mã C');
+        showResult('Vui lòng nhập mã C trước khi biên dịch.', 'error');
+        return;
+    }
+    const payload = {
+        code,
+        problem_id: currentProblem ? currentProblem.id : null,
+        testcases: getActiveTestcases()
+    };
+    const result = await requestJson('/compile', payload);
+    showResult(formatCompileResult(result), 'result');
+    await loadStudentSubmissionHistory();
+}
+
+async function handleRun() {
+    const code = getCode();
+    if (!code.trim()) {
+        showResult('Vui lòng nhập mã C trước khi chạy.', 'error');
+        return;
+    }
+    const payload = {
+        code,
+        problem_id: currentProblem ? currentProblem.id : null,
+        testcases: getActiveTestcases()
+    };
+    const result = await requestJson('/compile', payload);
+    showResult(formatRunResult(result), 'result');
+    await loadStudentSubmissionHistory();
+}
+
+async function handleHelp() {
+    const code = getCode();
+    if (!code.trim()) {
+        showResult('Vui lòng nhập mã C trước khi nhận gợi ý.', 'error');
         return;
     }
 
-    showLoading('compileSpinner');
-    try {
-        const response = await fetch(`${API_BASE_URL}/compile`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code })
-        });
+    const resultsContainer = document.getElementById('resultsContainer');
+    const latestText = resultsContainer?.textContent || '';
+    const passedAll = /\b(\d+)\/(\d+)\b/.exec(latestText);
+    if (passedAll && Number(passedAll[1]) > 0 && Number(passedAll[1]) === Number(passedAll[2])) {
+        showResult('<strong>✅ Mã của bạn đã đúng.</strong><br>Không cần gợi ý thêm vì đã vượt qua tất cả testcase.', 'success');
+        return;
+    }
 
-        const data = await response.json();
-        hideLoading('compileSpinner');
+    const payload = {
+        code,
+        error_message: latestText,
+        output: '',
+        ai_provider: document.getElementById('aiProviderSelect')?.value || 'gemini'
+    };
+    const result = await requestJson('/suggestions', payload);
+    showResult(`<strong>💡 Gợi ý từ AI:</strong><br>${escapeHtml(result.suggestions || 'Không có gợi ý.')}`, 'result');
+}
 
-        if (data.success) {
-            showSuccess('✓ Biên dịch thành công');
-            showCompileResult(data);
-        } else {
-            showError(data.error || 'Biên dịch thất bại');
-            showCompileResult(data);
-        }
-    } catch (error) {
-        hideLoading('compileSpinner');
-        showError('Lỗi kết nối: ' + error.message);
+async function handleCreateProblem() {
+    const titleInput = document.getElementById('problemTitle');
+    const descriptionInput = document.getElementById('problemDescription');
+    const requirementsInput = document.getElementById('problemRequirements');
+    const standardCodeInput = document.getElementById('problemStandardCode');
+    const difficultyInput = document.getElementById('problemDifficulty');
+
+    const title = titleInput?.value.trim() || '';
+    const description = descriptionInput?.value.trim() || '';
+    const requirements = requirementsInput?.value.trim() || '';
+    const standardCode = standardCodeInput?.value || '';
+    const difficulty = difficultyInput?.value || 'medium';
+
+    if (!title || !requirements) {
+        showResult('Vui lòng nhập tiêu đề và yêu cầu đề bài.', 'error');
+        return;
+    }
+
+    const result = await requestJson('/problems', { title, description, requirements, standard_code: standardCode, difficulty }, 'POST');
+    if (result.success) {
+        showResult('✅ Tạo đề tài thành công.', 'success');
+        if (titleInput) titleInput.value = '';
+        if (descriptionInput) descriptionInput.value = '';
+        if (requirementsInput) requirementsInput.value = '';
+        if (standardCodeInput) standardCodeInput.value = '';
+        if (difficultyInput) difficultyInput.value = 'medium';
+        await loadProblems();
+    } else {
+        showResult(result.error || 'Không thể tạo đề tài.', 'error');
     }
 }
 
-function showCompileResult(data) {
-    const resultsContainer = document.getElementById('resultsContainer');
-    if (!resultsContainer) return;
-
-    let html = '';
-    if (data.success) {
-        html = `
-            <div class="alert alert-success alert-custom">✓ Biên dịch thành công</div>
-            ${data.message ? `<div class="mb-2"><strong>Thông báo:</strong> ${escapeHtml(data.message)}</div>` : ''}
-            ${data.executable ? `<div><strong>Executable:</strong> ${escapeHtml(data.executable)}</div>` : ''}
-            ${data.output ? `<pre class="mt-3 p-3 bg-dark text-light rounded">${escapeHtml(data.output)}</pre>` : ''}
-        `;
+async function handleDeleteProblem() {
+    if (!currentProblem?.id) {
+        showResult('Vui lòng chọn đề bài trước.', 'error');
+        return;
+    }
+    if (!confirm(`Xóa đề bài "${currentProblem.tieu_de}"?`)) {
+        return;
+    }
+    const result = await requestJson(`/problems/${currentProblem.id}`, null, 'DELETE');
+    if (result.success) {
+        showResult('Đã xóa đề bài.', 'success');
+        await loadProblems();
     } else {
-        html = `
-            <div class="alert alert-danger alert-custom">✗ Biên dịch thất bại</div>
-            ${data.error ? `<pre class="mt-3 p-3 bg-dark text-light rounded">${escapeHtml(data.error)}</pre>` : ''}
-            ${data.output ? `<pre class="mt-3 p-3 bg-dark text-light rounded">${escapeHtml(data.output)}</pre>` : ''}
-        `;
+        showResult(result.error || 'Không thể xóa đề bài.', 'error');
+    }
+}
+
+async function deleteTestcase(testcaseId) {
+    if (!testcaseId || !confirm('Bạn có chắc chắn muốn xóa testcase này?')) return;
+    const result = await requestJson(`/testcases/${testcaseId}`, null, 'DELETE');
+    showResult(result.success ? 'Đã xóa testcase.' : (result.error || 'Không thể xóa testcase'), result.success ? 'success' : 'error');
+    if (result.success && currentProblem?.id) {
+        await loadProblemDetails(currentProblem.id);
+    }
+}
+
+async function handleAddTestcase() {
+    const form = document.getElementById('testcaseFormContainer');
+    const addButton = document.getElementById('addTestcaseBtn');
+    const nameInput = document.getElementById('testcaseName');
+    const inputInput = document.getElementById('testcaseInput');
+    const outputInput = document.getElementById('testcaseOutput');
+
+    if (form && form.style.display === 'none') {
+        form.style.display = 'block';
+        if (addButton) addButton.textContent = '➕ Thêm testcase';
+        if (nameInput) nameInput.focus();
+        return;
     }
 
-    resultsContainer.innerHTML = html;
+    if (!currentProblem?.id) {
+        showResult('Vui lòng chọn đề bài trước.', 'error');
+        return;
+    }
+
+    const name = nameInput?.value.trim() || '';
+    const inputData = inputInput?.value.trim() || '';
+    const expectedOutput = outputInput?.value.trim() || '';
+
+    if (!inputData || !expectedOutput) {
+        showResult('Vui lòng nhập input và expected output.', 'error');
+        return;
+    }
+
+    const result = await requestJson(`/problems/${currentProblem.id}/testcases`, { name, input_data: inputData, expected_output: expectedOutput }, 'POST');
+    if (result.success) {
+        showResult('Đã thêm testcase mới.', 'success');
+        if (nameInput) nameInput.value = '';
+        if (inputInput) inputInput.value = '';
+        if (outputInput) outputInput.value = '';
+        if (form) form.style.display = 'none';
+        if (addButton) addButton.textContent = '+ Thêm Test Case';
+        await loadProblemDetails(currentProblem.id);
+    } else {
+        showResult(result.error || 'Không thể thêm testcase.', 'error');
+    }
+}
+
+function buildRoleSection(users, role, title, subtitle, icon) {
+    const filteredUsers = users.filter(user => (user.vai_tro || 'hoc_sinh').toLowerCase() === role);
+    return `
+        <div class="management-section">
+            <div class="management-section-header">
+                <div>
+                    <h5>${icon} ${title}</h5>
+                    <div class="management-section-subtitle">${subtitle}</div>
+                </div>
+                <span class="management-badge">${filteredUsers.length}</span>
+            </div>
+            ${filteredUsers.length ? filteredUsers.map(user => `
+                <div class="management-row">
+                    <div class="management-user">
+                        <strong>${escapeHtml(user.ten_dang_nhap || user.username || 'user')}</strong>
+                        <div class="management-meta">${escapeHtml(user.email || '—')}</div>
+                    </div>
+                    <div class="management-controls">
+                        <span class="role-pill role-${(user.vai_tro || 'hoc_sinh').toLowerCase()}">${roleLabel(user.vai_tro || 'hoc_sinh')}</span>
+                        <select class="form-control form-control-sm" id="role-${user.id}">
+                            <option value="hoc_sinh" ${user.vai_tro === 'hoc_sinh' ? 'selected' : ''}>Học sinh</option>
+                            <option value="giaovien" ${user.vai_tro === 'giaovien' ? 'selected' : ''}>Giáo viên</option>
+                        </select>
+                        <button class="btn btn-small" onclick="updateUserRole(${user.id})">Cập nhật</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteUser(${user.id})">Xóa</button>
+                        <button class="btn btn-small btn-outline-info" onclick="viewStudentDetail(${user.id})">Xem chi tiết</button>
+                    </div>
+                </div>
+            `).join('') : `<div class="empty">${title} chưa có dữ liệu.</div>`}
+        </div>
+    `;
+}
+
+async function loadTeacherStudents() {
+    const result = await requestJson('/admin/users');
+    const container = document.getElementById('teacherStudentList');
+    if (!container) return;
+    if (!result.users || !result.users.length) {
+        container.innerHTML = '<div class="empty">Không có học sinh nào.</div>';
+        return;
+    }
+    const students = result.users.filter(user => (user.vai_tro || 'hoc_sinh').toLowerCase() === 'hoc_sinh');
+    container.innerHTML = students.length ? students.map(student => `
+        <div class="management-row">
+            <div class="management-user">
+                <strong>${escapeHtml(student.ten_dang_nhap || student.username || 'user')}</strong>
+                <div class="management-meta">${escapeHtml(student.email || '—')}</div>
+            </div>
+            <div class="management-controls">
+                <button class="btn btn-small btn-outline-info" onclick="viewStudentDetail(${student.id}, 'teacherStudentDetailPanel')">Xem chi tiết</button>
+            </div>
+        </div>
+    `).join('') : '<div class="empty">Không có học sinh nào.</div>';
+}
+
+async function viewTeacherStudentSubmissions(userId) {
+    const panel = document.getElementById('teacherStudentSubmissions');
+    if (!panel) return;
+    panel.innerHTML = '<div class="empty">Đang tải bài làm...</div>';
+    const result = await requestJson(`/admin/users/${userId}/submissions`);
+    if (!result.success || !result.submissions || !result.submissions.length) {
+        panel.innerHTML = '<div class="empty">Học sinh này chưa có bài làm nào.</div>';
+        return;
+    }
+    panel.innerHTML = `
+        <div class="management-section">
+            <div class="management-section-header">
+                <div>
+                    <h5>🧾 Lịch sử bài làm học sinh</h5>
+                    <div class="management-section-subtitle">Code đã dán và đề bài liên quan</div>
+                </div>
+            </div>
+            ${result.submissions.map(sub => `
+                <div class="management-row" style="display:block;">
+                    <div class="management-user">
+                        <strong>Bài làm #${sub.id}</strong>
+                        <div class="management-meta">${escapeHtml(sub.created_at || '')}</div>
+                        <div class="management-meta"><strong>Đề bài:</strong> ${escapeHtml(sub.problem_title || 'Không xác định')}</div>
+                        <div class="management-meta"><strong>Trạng thái:</strong> ${escapeHtml(getSubmissionSummary(sub))}</div>
+                        <div class="management-meta"><strong>Mô tả:</strong> ${escapeHtml(sub.problem_description || '')}</div>
+                    </div>
+                    <div class="management-controls" style="justify-content:flex-start; margin-top:8px;">
+                        <div style="width:100%;">
+                            <div class="management-meta"><strong>Code đã dán:</strong></div>
+                            <pre style="white-space:pre-wrap; word-break:break-word; background:#f8f9fa; padding:10px; border-radius:6px; margin-top:6px;">${escapeHtml(sub.code || '')}</pre>
+                            <div class="management-meta"><strong>Yêu cầu đề bài:</strong> ${escapeHtml(sub.problem_requirements || '')}</div>
+                            ${sub.compile_status ? `<div class="management-meta"><strong>Biên dịch:</strong> ${sub.compile_status.success ? 'Thành công' : 'Thất bại'}</div>` : ''}
+                            ${Array.isArray(sub.test_results) && sub.test_results.length ? `<div class="management-meta"><strong>Chi tiết testcase:</strong></div>${sub.test_results.map((test, index) => `<div class="management-meta" style="margin-top:6px;"><strong>${index + 1}. ${test.passed ? '✅' : '❌'} ${escapeHtml(test.name || `Testcase ${index + 1}`)}:</strong><br>Input: ${escapeHtml(test.input || '')}<br>Expected: ${escapeHtml(test.expected_output || '')}<br>Actual: ${escapeHtml(test.actual_output || '')}</div>`).join('')}` : ''}
+                            ${sub.run_output ? `<div class="management-meta"><strong>Output:</strong> ${escapeHtml(sub.run_output)}</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+async function loadAdminUsers() {
+    const result = await requestJson('/admin/users');
+    const container = document.getElementById('userManagementList');
+    if (!container) return;
+    if (!result.users || !result.users.length) {
+        container.innerHTML = '<div class="empty">Không có người dùng.</div>';
+        return;
+    }
+    const users = result.users;
+    container.innerHTML = `
+        <div class="management-section">
+            <div class="management-section-header">
+                <div>
+                    <h5>🛡️ Quản trị hệ thống</h5>
+                    <div class="management-section-subtitle">Quản lý vai trò người dùng trong hệ thống</div>
+                </div>
+            </div>
+        </div>
+        <div class="management-note">Chỉ admin có thể chuyển vai trò giữa giáo viên và học sinh.</div>
+        ${buildRoleSection(users, 'giaovien', 'Quản lý giáo viên', 'Danh sách giáo viên trong hệ thống', '')}
+        <div id="studentSubmissionsPanel" class="mt-3"></div>
+        ${buildRoleSection(users, 'hoc_sinh', 'Danh sách học sinh', 'Danh sách học sinh trong hệ thống', '')}
+    `;
+}
+
+async function updateUserRole(userId) {
+    const select = document.getElementById(`role-${userId}`);
+    if (!select) return;
+    const result = await requestJson(`/admin/users/${userId}/role`, { role: select.value }, 'POST');
+    showResult(result.success ? 'Đã cập nhật vai trò.' : (result.error || 'Không thể cập nhật'), result.success ? 'success' : 'error');
+    if (result.success) {
+        await loadAdminUsers();
+    }
+}
+
+async function deleteUser(userId) {
+    if (!confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) return;
+    const result = await requestJson(`/admin/users/${userId}`, null, 'DELETE');
+    showResult(result.success ? 'Đã xóa tài khoản.' : (result.error || 'Không thể xóa tài khoản'), result.success ? 'success' : 'error');
+    if (result.success) {
+        await loadAdminUsers();
+    }
+}
+
+async function viewStudentDetail(userId, panelId = 'studentSubmissionsPanel') {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    const [usersResult, submissionsResult, teacherInfoResult] = await Promise.all([
+        requestJson('/admin/users'),
+        requestJson(`/admin/users/${userId}/submissions`),
+        requestJson(`/admin/users/${userId}/teacher-info`)
+    ]);
+    const user = (usersResult.users || []).find(item => String(item.id) === String(userId));
+    if (!user) {
+        panel.innerHTML = '<div class="empty">Không tìm thấy người dùng.</div>';
+        return;
+    }
+    const role = (user.vai_tro || 'hoc_sinh').toLowerCase();
+    const isTeacher = role === 'giaovien';
+    const roleLabelText = isTeacher ? 'giáo viên' : role === 'hoc_sinh' ? 'học sinh' : 'người dùng';
+    const infoTitle = isTeacher ? 'Chi tiết giáo viên' : 'Chi tiết học sinh';
+    const infoSubtitle = isTeacher ? 'Thông tin tài khoản và các đề bài do giáo viên này tạo' : 'Thông tin tài khoản và lịch sử làm bài';
+    const submissions = submissionsResult.success ? (submissionsResult.submissions || []) : [];
+    const teacherProblems = isTeacher && teacherInfoResult.success ? (teacherInfoResult.problems || []) : [];
+    panel.innerHTML = `
+        <div class="management-section">
+            <div class="management-section-header">
+                <div>
+                    <h5>${infoTitle}</h5>
+                    <div class="management-section-subtitle">${infoSubtitle}</div>
+                </div>
+            </div>
+            <div class="management-row" style="display:block;">
+                <div class="management-user">
+                    <strong>${escapeHtml(user.ten_dang_nhap || user.username || 'user')}</strong>
+                    <div class="management-meta"><strong>Email:</strong> ${escapeHtml(user.email || '—')}</div>
+                    <div class="management-meta"><strong>Vai trò:</strong> ${escapeHtml(roleLabel(user.vai_tro || 'hoc_sinh'))}</div>
+                    <div class="management-meta"><strong>Trạng thái:</strong> ${user.is_active === 0 ? 'Bị khóa' : 'Hoạt động'}</div>
+                    ${isTeacher ? '<div class="management-meta"><strong>Loại tài khoản:</strong> Giáo viên có thể quản lý bài tập và học sinh</div>' : ''}
+                </div>
+            </div>
+            ${isTeacher ? `
+                <div class="management-section-header" style="margin-top:12px;">
+                    <div>
+                        <h5>Đề bài đã tạo</h5>
+                        <div class="management-section-subtitle">Danh sách đề bài và testcase do giáo viên này tạo</div>
+                    </div>
+                </div>
+                ${teacherProblems.length ? teacherProblems.map(problem => `
+                    <div class="management-row" style="display:block;">
+                        <div class="management-user">
+                            <strong>${escapeHtml(problem.title || 'Đề bài không tên')}</strong>
+                            <div class="management-meta"><strong>Độ khó:</strong> ${escapeHtml(problem.difficulty || 'medium')}</div>
+                            <div class="management-meta"><strong>Mô tả:</strong> ${escapeHtml(problem.description || '—')}</div>
+                            <div class="management-meta"><strong>Yêu cầu:</strong> ${escapeHtml(problem.requirements || '—')}</div>
+                        </div>
+                        <div class="management-controls" style="justify-content:flex-start; margin-top:8px;">
+                            <div style="width:100%;">
+                                <div class="management-meta"><strong>Testcase:</strong></div>
+                                ${problem.testcases && problem.testcases.length ? problem.testcases.map(tc => `
+                                    <div class="management-meta" style="margin-top:6px;">
+                                        <strong>${escapeHtml(tc.name || `Testcase ${tc.id}`)}:</strong><br>
+                                        Input: ${escapeHtml(tc.input || '')}<br>
+                                        Expected output: ${escapeHtml(tc.expected_output || '')}
+                                    </div>
+                                `).join('') : '<div class="management-meta">Chưa có testcase nào.</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `).join('') : '<div class="empty">Giáo viên này chưa tạo đề bài nào.</div>'}
+            ` : ''}
+            <div class="management-section-header" style="margin-top:12px;">
+                <div>
+                    <h5>${isTeacher ? '' : 'Lịch sử làm bài'}</h5>
+                    <div class="management-section-subtitle">${isTeacher ? '' : 'Tên đề bài và code đã nộp của học sinh'}</div>
+                </div>
+            </div>
+            ${isTeacher ? '' : submissions.length ? submissions.map(sub => `
+                <div class="management-row" style="display:block;">
+                    <div class="management-user">
+                        <strong>${escapeHtml(sub.problem_title || `Bài làm #${sub.id}`)}</strong>
+                        <div class="management-meta">${escapeHtml(sub.created_at || '')}</div>
+                        <div class="management-meta"><strong>Đề bài:</strong> ${escapeHtml(sub.problem_title || 'Không xác định')}</div>
+                        <div class="management-meta"><strong>Trạng thái:</strong> ${escapeHtml(getSubmissionSummary(sub))}</div>
+                    </div>
+                    <div class="management-controls" style="justify-content:flex-start; margin-top:8px;">
+                        <div style="width:100%;">
+                            <div class="management-meta"><strong>Code đã nộp:</strong></div>
+                            <pre style="white-space:pre-wrap; word-break:break-word; background:#f8f9fa; padding:10px; border-radius:6px; margin-top:6px;">${escapeHtml(sub.code || '')}</pre>
+                            ${sub.compile_status ? `<div class="management-meta"><strong>Kết quả biên dịch:</strong> ${sub.compile_status.success ? 'Thành công' : 'Thất bại'}</div>` : ''}
+                            ${Array.isArray(sub.test_results) && sub.test_results.length ? `<div class="management-meta"><strong>Chi tiết testcase:</strong></div>${sub.test_results.map((test, index) => `<div class="management-meta" style="margin-top:6px;"><strong>${index + 1}. ${test.passed ? '✅' : '❌'} ${escapeHtml(test.name || `Testcase ${index + 1}`)}:</strong><br>Input: ${escapeHtml(test.input || '')}<br>Expected: ${escapeHtml(test.expected_output || '')}<br>Actual: ${escapeHtml(test.actual_output || '')}</div>`).join('')}` : ''}
+                            ${sub.run_output ? `<div class="management-meta"><strong>Output:</strong> ${escapeHtml(sub.run_output)}</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('') : '<div class="empty">Học sinh này chưa có bài làm nào.</div>'}
+        </div>
+    `;
+}
+
+async function requestJson(path, body = null, method = null) {
+    const requestMethod = method || (body ? 'POST' : 'GET');
+    const options = { method: requestMethod, headers: { 'Content-Type': 'application/json' }, credentials: 'include' };
+    if (body && requestMethod !== 'GET') {
+        options.body = JSON.stringify(body);
+    }
+    const response = await fetch(`${API_BASE_URL}${path}`, options);
+    return response.json();
+}
+
+function formatCompileResult(result) {
+    if (result.success) {
+        return `<strong>✅ Biên dịch thành công</strong>`;
+    }
+    return `<strong>❌ Biên dịch thất bại</strong>${result.error ? `<br>${escapeHtml(result.error)}` : ''}`;
+}
+
+function formatRunResult(result) {
+    const testcaseSummary = result.total_count ? `<div><strong>📊 Tiến độ testcase:</strong> ${result.passed_count ?? 0}/${result.total_count}</div>` : '';
+    const detailRows = (result.test_results || []).map((item, index) => {
+        const statusLabel = item.passed ? '✅ Đúng' : '❌ Sai';
+        const expected = item.expected_output ?? '';
+        const actual = item.actual_output ?? '';
+        const detailParts = [];
+        if (expected) detailParts.push(`<div><strong>Expected:</strong> ${escapeHtml(expected)}</div>`);
+        if (actual) detailParts.push(`<div><strong>Actual:</strong> ${escapeHtml(actual)}</div>`);
+        return `
+            <div class="mt-2 border rounded p-2">
+                <div><strong>Test ${index + 1}:</strong> ${statusLabel}</div>
+                ${detailParts.join('')}
+            </div>
+        `;
+    }).join('');
+    if (result.success) {
+        return `<strong>▶ Chạy testcase hoàn tất</strong><br>${testcaseSummary}${detailRows}`;
+    }
+    return `<strong>❌ Chạy testcase thất bại</strong><br>${escapeHtml(result.error || '')}`;
+}
+
+function formatAnalyzeResult(result) {
+    const parts = [];
+    if (result.classification) {
+        parts.push(`<strong>🔎 Phân loại lỗi:</strong> ${escapeHtml(result.classification.bug_type_name || result.classification.bug_type_id || 'Unknown')}`);
+    }
+    if (result.ai_analysis) {
+        parts.push(`<strong>💡 Gợi ý sửa:</strong><br>${escapeHtml(result.ai_analysis)}`);
+    }
+    if (result.errors && result.errors.length) {
+        parts.push(`<strong>⚠️ Lỗi phát hiện:</strong><br>${result.errors.map(err => `• ${escapeHtml(err)}`).join('<br>')}`);
+    }
+    return parts.join('<br><br>') || 'Không có kết quả phân tích.';
+}
+
+function showResult(message, type = 'result') {
+    const container = document.getElementById('resultsContainer');
+    if (!container) return;
+    const classes = { error: 'error', success: 'success', info: 'info', result: '' };
+    container.className = `card-body results ${classes[type]}`.trim();
+    container.innerHTML = message;
 }
 
 function escapeHtml(text) {
+    if (!text) return '';
     return String(text)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
-// Handle Analyze
-async function handleAnalyze() {
-    const code = getCode();
-    const testcases = getTestCases();
-
-    if (!code.trim()) {
-        showError('Vui lòng nhập mã C');
-        return;
+function getSubmissionSummary(sub) {
+    const passedCount = Number(sub?.passed_count ?? (Array.isArray(sub?.test_results) ? sub.test_results.filter((t) => t && t.passed).length : 0));
+    const totalCount = Number(sub?.total_count ?? (Array.isArray(sub?.test_results) ? sub.test_results.length : 0));
+    if (sub?.compile_status && sub.compile_status.success === false) {
+        return 'Lỗi biên dịch';
     }
-
-    showLoading('analyzeSpinner');
-    try {
-        const aiProviderEl = document.getElementById('aiProviderSelect');
-        const aiProvider = aiProviderEl ? aiProviderEl.value : 'gemini';
-
-        const response = await fetch(`${API_BASE_URL}/analyze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, testcases, ai_provider: aiProvider })
-        });
-
-        const data = await response.json();
-        hideLoading('analyzeSpinner');
-
-        let resultHTML = '';
-
-        // Compile status
-        if (data.compile_status) {
-            if (data.compile_status.success) {
-                resultHTML += '<div class="alert alert-success alert-custom">✓ Biên dịch thành công</div>';
-            } else {
-                resultHTML += '<div class="alert alert-error alert-custom">';
-                resultHTML += '<strong>Lỗi biên dịch:</strong>';
-                resultHTML += `<div class="error-details">${escapeHtml(data.compile_status.error)}</div>`;
-                resultHTML += '</div>';
-            }
-        }
-
-        // Test results - HIDDEN (only for backend processing)
-        // if (data.test_results && data.test_results.length > 0) {
-        //     resultHTML += '<h6 class="mt-3">Test Results:</h6>';
-        //     data.test_results.forEach((test, idx) => {
-        //         const status = test.passed ? '✓ PASS' : '✗ FAIL';
-        //         const statusClass = test.passed ? 'passed' : 'failed';
-        //         resultHTML += `<div class="test-case-result ${statusClass}">`;
-        //         resultHTML += `<strong>Test ${idx + 1}: ${status}</strong><br>`;
-        //         resultHTML += `Input: ${escapeHtml(test.input)}<br>`;
-        //         resultHTML += `Expected: ${escapeHtml(test.expected)}<br>`;
-        //         resultHTML += `Actual: ${escapeHtml(test.actual)}`;
-        //         resultHTML += '</div>';
-        //     });
-        // }
-
-        // AI Suggestions
-        // AI Suggestions / Classification
-            if (data.classification) {
-                const cls = data.classification;
-                // Show localized Vietnamese name if provided by backend
-                const name = cls.bug_type_name || cls.bug_type_id || 'Unknown';
-                resultHTML += '<div class="suggestion-box mt-3">';
-                resultHTML += '<h6>🔎 Phân loại lỗi (AI):</h6>';
-                resultHTML += `<div class="suggestion-text"><strong>${escapeHtml(name)}</strong></div>`;
-                resultHTML += '</div>';
-            }
-
-        if (data.ai_analysis) {
-            resultHTML += '<div class="suggestion-box mt-3">';
-            resultHTML += '<h6>💡 Phân tích & Gợi ý sửa (AI):</h6>';
-            // Format with line breaks and preserve whitespace for better readability
-            const formattedAnalysis = escapeHtml(data.ai_analysis)
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/\n/g, '<br>');
-            resultHTML += `<div class="suggestion-text" style="white-space: pre-wrap; word-wrap: break-word;"><p>${formattedAnalysis}</p></div>`;
-            resultHTML += '</div>';
-        } else if (data.ai_suggestions) {
-            resultHTML += '<div class="suggestion-box mt-3">';
-            resultHTML += '<h6>💡 Gợi ý từ AI:</h6>';
-            const formattedSuggestions = escapeHtml(data.ai_suggestions)
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/\n/g, '<br>');
-            resultHTML += `<div class="suggestion-text" style="white-space: pre-wrap; word-wrap: break-word;"><p>${formattedSuggestions}</p></div>`;
-            resultHTML += '</div>';
-        }
-
-        // Errors
-        if (data.errors && data.errors.length > 0) {
-            resultHTML += '<div class="alert alert-error alert-custom mt-3">';
-            resultHTML += '<strong>Lỗi:</strong><ul>';
-            data.errors.forEach(err => {
-                resultHTML += `<li>${escapeHtml(err)}</li>`;
-            });
-            resultHTML += '</ul></div>';
-        }
-
-        if (!resultHTML.trim()) {
-            resultHTML = '<p class="text-muted">Không có kết quả</p>';
-        }
-
-        document.getElementById('resultsContainer').innerHTML = resultHTML;
-
-    } catch (error) {
-        hideLoading('analyzeSpinner');
-        showError('Lỗi kết nối: ' + error.message);
+    if (totalCount) {
+        return `Đã vượt ${passedCount}/${totalCount} testcase`;
     }
+    return 'Đã chạy';
 }
 
-// Handle Add Test Case
-function handleAddTestCase() {
-    const container = document.getElementById('testCasesContainer');
-    const count = container.children.length + 1;
-
-    const html = `
-        <div class="test-case">
-            <div class="row">
-                <div class="col-md-6">
-                    <label class="form-label">Input:</label>
-                    <textarea class="form-control test-input" style="height: 60px;" placeholder="Input"></textarea>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Expected Output:</label>
-                    <textarea class="form-control test-output" style="height: 60px;" placeholder="Expected Output"></textarea>
-                </div>
-            </div>
-            <button class="btn btn-outline-danger btn-sm mt-2" onclick="this.parentElement.remove();">✕ Xóa</button>
-        </div>
-    `;
-
-    container.insertAdjacentHTML('beforeend', html);
+function roleLabel(role) {
+    return {'admin': 'Admin', 'giaovien': 'Giáo viên', 'hoc_sinh': 'Học sinh'}[role] || 'Học sinh';
 }
 
-// Handle Clear
-function handleClear() {
-    if (confirm('Bạn có chắc chắn muốn xóa mã?')) {
-        document.getElementById('codeEditor').value = '';
-        document.getElementById('resultsContainer').innerHTML = '<p class="text-muted">Kết quả sẽ hiển thị tại đây...</p>';
-    }
+async function logout() {
+    await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+    window.location.href = 'auth.html';
 }
 
-// Render test cases
-function renderTestCases() {
-    // Mặc định có 1 test case trống
-    handleAddTestCase();
-}
-
-// Show/Hide Loading
-function showLoading(id) {
-    document.getElementById(id).classList.remove('d-none');
-}
-
-function hideLoading(id) {
-    document.getElementById(id).classList.add('d-none');
-}
-
-// Show Messages
-function showSuccess(message) {
-    const html = `<div class="alert alert-success alert-custom">${message}</div>`;
-    document.getElementById('resultsContainer').innerHTML = html + document.getElementById('resultsContainer').innerHTML;
-}
-
-function showError(message) {
-    const html = `<div class="alert alert-error alert-custom"><strong>Lỗi:</strong> ${escapeHtml(message)}</div>`;
-    document.getElementById('resultsContainer').innerHTML = html + document.getElementById('resultsContainer').innerHTML;
-}
-
-// Escape HTML
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Check User Authentication
-// Check authentication and redirect if not logged in
-async function checkUserAuthAndRedirect() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/auth/check`, {
-            credentials: 'include'
-        });
-        const data = await response.json();
-        
-        if (!data.authenticated) {
-            // Not logged in, redirect to login page
-            window.location.href = 'auth.html';
-        }
-    } catch (error) {
-        console.error('Auth check error:', error);
-        // On error, redirect to login to be safe
-        window.location.href = 'auth.html';
-    }
-}
-
-async function checkUserAuth() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/auth/check`, {
-            credentials: 'include'
-        });
-        const data = await response.json();
-        
-        if (data.authenticated) {
-            // User is logged in
-            document.getElementById('loginLink').style.display = 'none';
-            document.getElementById('userDisplay').style.display = 'inline';
-            document.getElementById('username').textContent = data.username;
-            document.getElementById('logoutBtn').style.display = 'inline-block';
-        } else {
-            // User is not logged in
-            document.getElementById('loginLink').style.display = 'inline-block';
-            document.getElementById('userDisplay').style.display = 'none';
-            document.getElementById('logoutBtn').style.display = 'none';
-        }
-    } catch (error) {
-        console.error('Error checking auth:', error);
-    }
-}
-
-// Setup Logout
-function setupLogout() {
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', async function() {
-            try {
-                const response = await fetch(`${API_BASE_URL}/auth/logout`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Redirect to login page
-                    window.location.href = 'auth.html';
-                }
-            } catch (error) {
-                console.error('Logout error:', error);
-            }
-        });
-    }
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const editor = document.getElementById('codeEditor');
+        if (editor) editor.value = e.target.result;
+    };
+    reader.readAsText(file);
 }
